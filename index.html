@@ -369,21 +369,35 @@ function musHat(when){try{
   const f=a.createBiquadFilter();f.type='highpass';f.frequency.value=6000;
   const g=a.createGain();g.gain.setValueAtTime(.12,when);
   s.connect(f).connect(g).connect(musGain());s.start(when);}catch(e){}}
-const MUS_BASS=[55,55,65.41,55,73.42,55,82.41,65.41];       // A1 C2 D2 E2 — fraseado menor
-const MUS_ARP=[220,261.63,329.63,440,329.63,261.63];
+// um tema por mapa — o sequenciador lê THEMES[mapIdx] em tempo real
+const THEMES=[
+  { // ARMAZÉM — industrial, médio (~140bpm, lá menor)
+    step:.214,bass:[55,55,65.41,55,73.42,55,82.41,65.41],
+    arp:[220,261.63,329.63,440,329.63,261.63],
+    bassType:'sawtooth',bassVol:.42,arpType:'triangle',arpVol:.14,hatEvery:4},
+  { // CORREDORES — tenso, rápido (~165bpm, sol frígio)
+    step:.18,bass:[49,49,51.91,49,58.27,49,65.41,51.91],
+    arp:[196,233.08,311.13,233.08,392,311.13],
+    bassType:'square',bassVol:.26,arpType:'sawtooth',arpVol:.1,hatEvery:2},
+  { // ARENA — épico, pesado (~115bpm, mi quintas)
+    step:.26,bass:[41.2,41.2,61.74,41.2,55,41.2,82.41,61.74],
+    arp:[164.81,246.94,329.63,493.88,329.63,246.94],
+    bassType:'sawtooth',bassVol:.46,arpType:'square',arpVol:.08,hatEvery:8},
+];
 function startMusic(){
   if(musTimer)return;
   musStep=0;musNext=ac().currentTime+.08;
   musTimer=setInterval(()=>{try{
-    const a=ac(),STEP=.214; // ~140bpm colcheias
+    const a=ac();
     while(musNext<a.currentTime+.35){
-      const b=MUS_BASS[(musStep>>1)%8];
-      musNote(b,.2,'sawtooth',.42,musNext);
-      musNote(b/2,.22,'sine',.5,musNext);
-      if(musStep%4===2)musHat(musNext);
+      const T=THEMES[mapIdx%THEMES.length];
+      const b=T.bass[(musStep>>1)%T.bass.length];
+      musNote(b,T.step*.95,T.bassType,T.bassVol,musNext);
+      musNote(b/2,T.step,'sine',.5,musNext);
+      if(musStep%T.hatEvery===(T.hatEvery>>1))musHat(musNext);
       if((musStep>>4)%2===1&&musStep%2===0)
-        musNote(MUS_ARP[(musStep>>1)%6],.16,'triangle',.14,musNext);
-      musStep++;musNext+=STEP;
+        musNote(T.arp[(musStep>>1)%T.arp.length],T.step*.8,T.arpType,T.arpVol,musNext);
+      musStep++;musNext+=T.step;
     }
   }catch(e){}},120);
 }
@@ -520,6 +534,7 @@ function openSpot(minDist){
 }
 function applyMap(i,quiet){
   mapIdx=i;map=parseMap(MAPS[i]);
+  musStep=0; // tema novo arranca no início da frase
   computeReach();
   medkits=[];guns=[];booms=[];
   const s=openSpot(0);p.x=s.x;p.y=s.y;
@@ -1346,7 +1361,7 @@ window.__dbg=()=>({state,mode:NET.mode,code:NET.code,players:NET.players.size,en
   medkits:medkits.length,guns:guns.length,mapIdx,mobile:MOBILE,music:!!musTimer,muted,
   gMus:MUSG?MUSG.gain.value:null,gMaster:MG?MG.gain.value:null,
   enemiesReachable:enemies.every(e=>reachable(e.x,e.y))});
-window.__giveGun=giveGun;window.__hurt=v=>takeDamage(v);window.__wave=()=>{enemies=[];}; // hooks de teste
+window.__giveGun=giveGun;window.__hurt=v=>takeDamage(v);window.__wave=()=>{enemies=[];};window.__map=i=>applyMap(i); // hooks de teste
 </script>
 </body>
 </html>
