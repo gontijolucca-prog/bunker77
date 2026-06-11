@@ -21,7 +21,18 @@ A ligação é direta entre browsers (WebRTC via PeerJS) — não há servidor d
 | Clique | Disparar |
 | R | Recarregar |
 | Shift | Correr |
+| M | Som on/off |
 | Esc | Pausa |
+
+**Telemóvel:** controlos touch automáticos — joystick à esquerda, arrastar à direita para apontar, botão FOGO.
+
+## Jogo
+
+- Health packs no mapa (+30 vida) e +15 vida por onda sobrevivida.
+- Armas para apanhar: metralhadora, raio laser, bazooka (explosão em área).
+- Boss gigante a cada 10 ondas (+1000 pontos).
+- Em multiplayer: respawn em 5 s com balas cheias; se morrerem todos ao mesmo tempo, a equipa recua uma onda.
+- Música procedural com botão de mute (🔊 / tecla M).
 
 ## Tecnologia
 
