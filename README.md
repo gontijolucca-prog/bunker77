@@ -39,3 +39,4 @@ A ligação é direta entre browsers (WebRTC via PeerJS) — não há servidor d
 
 Ficheiro único (`index.html`), sem build. Motor raycasting próprio em Canvas 2D, som procedural WebAudio, netcode host-autoritativo com previsão local e interpolação.
 - O jogo atualiza-se sozinho entre ondas quando há versão nova — sem refresh manual.
+- Segredo: há uma porta arco-íris escondida num canto de cada mapa (não aparece no minimapa)…
