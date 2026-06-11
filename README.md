@@ -28,12 +28,13 @@ A ligação é direta entre browsers (WebRTC via PeerJS) — não há servidor d
 
 ## Jogo
 
-- Health packs no mapa (+30 vida) e +15 vida por onda sobrevivida.
-- Armas para apanhar: metralhadora, raio laser, bazooka (explosão em área).
-- Boss gigante a cada 10 ondas (+1000 pontos).
+- Health packs e armas aparecem constantemente no mapa; +15 vida por onda sobrevivida.
+- Armas para apanhar: metralhadora, raio laser (feixe contínuo) e bazooka (explosão em área). Troca com 1-4, scroll ou toque na munição. Morrer = perder as armas (voltam a aparecer no mapa).
+- Boss gigante a cada 10 ondas (+1000 pontos) e mudança de mapa (3 mapas em rotação).
 - Em multiplayer: respawn em 5 s com balas cheias; se morrerem todos ao mesmo tempo, a equipa recua uma onda.
 - Música procedural com botão de mute (🔊 / tecla M).
 
 ## Tecnologia
 
 Ficheiro único (`index.html`), sem build. Motor raycasting próprio em Canvas 2D, som procedural WebAudio, netcode host-autoritativo com previsão local e interpolação.
+- O jogo atualiza-se sozinho entre ondas quando há versão nova — sem refresh manual.

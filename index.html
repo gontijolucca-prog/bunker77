@@ -94,6 +94,10 @@ html,body{height:100%;background:var(--bg);overflow:hidden;font-family:"Courier 
   background:rgba(5,8,14,.62);border:1px solid rgba(223,231,239,.18);color:var(--hud);
   font-size:16px;pointer-events:auto;cursor:pointer;touch-action:none}
 #wname{font-size:11px;letter-spacing:.25em;color:var(--ac2);margin-bottom:2px}
+#ammobox{pointer-events:auto}
+.ws{display:inline-block;width:18px;height:18px;border:1px solid;color:var(--hud);
+  font-size:11px;line-height:18px;text-align:center;margin-left:4px;opacity:.4}
+.ws.on{opacity:1;background:rgba(255,255,255,.1)}
 @media (pointer:coarse){#muteBtn{right:120px;top:14px}}
 /* controlos touch */
 #touch{display:none;position:fixed;inset:0;z-index:9;pointer-events:none}
@@ -131,7 +135,7 @@ html,body{height:100%;background:var(--bg);overflow:hidden;font-family:"Courier 
   <div class="box" id="stats">PONTOS<b id="score">0</b>ONDA <span id="wave">1</span> · RECORDE <span id="best">0</span></div>
   <div class="box" id="roomBox">SALA <b id="roomCode">----</b> · <span id="roomN">1</span> NO BUNKER</div>
   <div class="box" id="hpbox"><div class="lbl">VIDA</div><div id="hpbar"><div id="hpfill"></div></div></div>
-  <div class="box" id="ammobox"><div id="wname">CAÇADEIRA</div><div id="ammo">8<small> / 8</small></div><div id="rl">A RECARREGAR…</div></div>
+  <div class="box" id="ammobox"><div id="wname">CAÇADEIRA</div><div id="ammo">8<small> / 8</small></div><div id="rl">A RECARREGAR…</div><div id="wslots"></div></div>
   <canvas id="mini" width="96" height="96"></canvas>
   <button id="muteBtn">🔊</button>
 </div>
@@ -146,7 +150,7 @@ html,body{height:100%;background:var(--bg);overflow:hidden;font-family:"Courier 
 <div id="ov">
   <h1>BUNKER <span>77</span></h1>
   <div class="sub">SOBREVIVE ÀS ONDAS — JUNTOS</div>
-  <div class="keys"><b>WASD</b> mover · <b>RATO</b> apontar · <b>CLIQUE</b> disparar · <b>R</b> recarregar · <b>SHIFT</b> correr · <b>M</b> música</div>
+  <div class="keys"><b>WASD</b> mover · <b>RATO</b> apontar · <b>CLIQUE</b> disparar · <b>R</b> recarregar · <b>SHIFT</b> correr · <b>M</b> música · <b>1-4/SCROLL</b> trocar arma</div>
   <div class="final" id="finalTxt"></div>
   <div id="pauseHint">PAUSA — CLICA PARA CONTINUAR</div>
   <div id="linkRow"><div id="linkTxt"></div><button class="cta alt" id="copyBtn">COPIAR LINK DA SALA</button></div>
@@ -176,33 +180,117 @@ const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
 const $=id=>document.getElementById(id);
 const ov=$('ov'),hud=$('hud'),cross=$('cross'),dmgEl=$('dmg'),banner=$('banner');
 
-const MAPSTR=[
-"########################",
-"#......................#",
-"#.##...##....##...%%...#",
-"#.##...##....##...%%...#",
-"#......................#",
-"#...#............#.....#",
-"#...#....@@@@....#.....#",
-"#........@..@..........#",
-"#........@..@..........#",
-"#...#....@@@@....#.....#",
-"#...#............#.....#",
-"#......................#",
-"#..%%..............##..#",
-"#..%%......##......##..#",
-"#..........##..........#",
-"#......................#",
-"#.###..............###.#",
-"#.#..................#.#",
-"#......####..####......#",
-"#......#........#......#",
-"#......#........#......#",
-"#......##......##......#",
-"#......................#",
-"########################"];
-const MW=24,MH=24;
-const map=MAPSTR.map(r=>[...r].map(c=>c==='#'?1:c==='%'?2:c==='@'?3:0));
+const MW=32,MH=32;
+const MAPS=[
+[ // ARMAZÉM — grelha de pilares
+"################################",
+"#..............................#",
+"#..##....##....##....##....##..#",
+"#..##....##....##....##....##..#",
+"#..............................#",
+"#..............................#",
+"#..##....%%....@@....%%....##..#",
+"#..##....%%....@@....%%....##..#",
+"#..............................#",
+"#..............................#",
+"#..##....##....##....##....##..#",
+"#..##....##....##....##....##..#",
+"#..............................#",
+"#..............................#",
+"#..%%....@@..........@@....%%..#",
+"#..%%....@@..........@@....%%..#",
+"#..............................#",
+"#..............................#",
+"#..##....##....##....##....##..#",
+"#..##....##....##....##....##..#",
+"#..............................#",
+"#..............................#",
+"#..%%....##....@@....##....%%..#",
+"#..%%....##....@@....##....%%..#",
+"#..............................#",
+"#..............................#",
+"#..##....##....##....##....##..#",
+"#..##....##....##....##....##..#",
+"#..............................#",
+"#..............................#",
+"#..............................#",
+"################################"],
+[ // CORREDORES — paredes longas com aberturas
+"################################",
+"#..............................#",
+"#.######.########.###########..#",
+"#..............................#",
+"#####.#####.######.#####.#######",
+"#..............................#",
+"#..%%.....##........##.....%%..#",
+"#..............................#",
+"#.####.###############..#####..#",
+"#..............................#",
+"######.#####..@@..#####.########",
+"#..............................#",
+"#..##......########......##....#",
+"#..............................#",
+"#.#####.#####....#####.#######.#",
+"#..............................#",
+"#......@@..............@@......#",
+"#..............................#",
+"#.########..##########..######.#",
+"#..............................#",
+"#####..######......######..####",
+"#..............................#",
+"#..%%.....######........%%.....#",
+"#..............................#",
+"#.######.#########.##########..#",
+"#..............................#",
+"######.######..######.#########",
+"#..............................#",
+"#..##....@@....##....@@....##..#",
+"#..............................#",
+"#..............................#",
+"################################"],
+[ // ARENA — anel aberto com fortaleza central
+"################################",
+"#..............................#",
+"#..............................#",
+"#...######............######...#",
+"#...#......................#...#",
+"#...#......................#...#",
+"#...#.....%%%%....%%%%.....#...#",
+"#...#......................#...#",
+"#..............................#",
+"#..............................#",
+"#.....@@..................@@...#",
+"#..............................#",
+"#............##..##............#",
+"#............#....#............#",
+"#............#....#............#",
+"#............##..##............#",
+"#..............................#",
+"#.....@@..................@@...#",
+"#..............................#",
+"#..............................#",
+"#...#......................#...#",
+"#...#.....%%%%....%%%%.....#...#",
+"#...#......................#...#",
+"#...#......................#...#",
+"#...######............######...#",
+"#..............................#",
+"#..............................#",
+"#......##....######....##......#",
+"#......##....######....##......#",
+"#..............................#",
+"#..............................#",
+"################################"]];
+function parseMap(rows){
+  const g=[];
+  for(let y=0;y<MH;y++){
+    const r=(rows[y]||('#'+'.'.repeat(MW-2)+'#')).padEnd(MW,'#').slice(0,MW);
+    g.push([...r].map(c=>c==='#'?1:c==='%'?2:c==='@'?3:0));
+  }
+  for(let i=0;i<MW;i++){g[0][i]=1;g[MH-1][i]=1;g[i][0]=1;g[i][MW-1]=1;}
+  return g;
+}
+let mapIdx=0,map=parseMap(MAPS[0]);
 const WALLC={1:[91,107,133],2:[158,84,52],3:[150,34,44]};
 const COLORS=['#ffd166','#4cc9f0','#80ed99','#ff8fab','#c77dff','#f4a261'];
 
@@ -213,13 +301,14 @@ let state='menu',time=0,score=0,wave=0,best=+(localStorage.b77||0);
 const WEAPONS={
   shotgun:{name:'CAÇADEIRA',dmg:50,rate:.28,mag:8,rel:.65,color:'#2b3445'},
   mg:{name:'METRALHADORA',dmg:22,rate:.09,mag:40,rel:.85,color:'#4cc9f0'},
-  laser:{name:'RAIO LASER',dmg:90,rate:.5,mag:6,rel:.9,color:'#ff3b30'},
+  laser:{name:'RAIO LASER',dmg:28,rate:.12,mag:60,rel:.9,beam:true,color:'#ff3b30'}, // beam contínuo ~230 dano/s
   bazooka:{name:'BAZOOKA',dmg:160,rate:1,mag:3,rel:1.1,splash:2.2,color:'#ffd166'},
 };
 const GUNKINDS=['mg','laser','bazooka'];
-let weapon='shotgun',mag=8;
+let weapon='shotgun',mag=8,inv=['shotgun'],mags={shotgun:8};
 let reloading=0,nextFire=0,flash=0,recoil=0,mouseDown=false,beamT=0;
 let enemies=[],medkits=[],guns=[],booms=[],nextWaveT=0,moving=false,dead=false,deadUntil=0,eid=1,mkId=1,gnId=1;
+let mkT=0,gnT=0,reach=null;
 const keys={};
 const zbuf=new Float32Array(W);
 $('best').textContent=best;
@@ -395,15 +484,46 @@ function moveBody(b,dx,dy,r){
   if(free(b.x+dx,b.y,r))b.x+=dx;
   if(free(b.x,b.y+dy,r))b.y+=dy;
 }
+function computeReach(){
+  // flood fill: maior componente aberta = zona jogável; salas seladas ficam fora
+  const comp=Array.from({length:MH},()=>new Array(MW).fill(0));
+  let best=0,bestId=0,id=0;
+  for(let y=1;y<MH-1;y++)for(let x=1;x<MW-1;x++){
+    if(map[y][x]>0||comp[y][x])continue;
+    id++;let n=0;const q=[[x,y]];comp[y][x]=id;
+    while(q.length){
+      const [cx,cy]=q.pop();n++;
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx=cx+dx,ny=cy+dy;
+        if(nx<1||ny<1||nx>=MW-1||ny>=MH-1||comp[ny][nx]||map[ny][nx]>0)continue;
+        comp[ny][nx]=id;q.push([nx,ny]);
+      }
+    }
+    if(n>best){best=n;bestId=id;}
+  }
+  reach=comp.map(r=>r.map(v=>v===bestId));
+}
+function reachable(x,y){return !reach||(reach[y|0]&&reach[y|0][x|0]);}
+function anyReachSpot(){
+  for(let y=1;y<MH-1;y++)for(let x=1;x<MW-1;x++)if(reach&&reach[y][x])return{x:x+.5,y:y+.5};
+  return{x:MW/2,y:MH/2};
+}
 function openSpot(minDist){
-  for(let i=0;i<200;i++){
+  for(let i=0;i<250;i++){
     const x=1.5+Math.random()*(MW-3),y=1.5+Math.random()*(MH-3);
-    if(!free(x,y,.35))continue;
+    if(!free(x,y,.35)||!reachable(x,y))continue;
     let ok=Math.hypot(x-p.x,y-p.y)>=minDist;
     for(const e of enemies)if(Math.hypot(x-e.x,y-e.y)<minDist)ok=false;
     if(ok)return{x,y};
   }
-  return{x:12.5,y:11.5};
+  return anyReachSpot();
+}
+function applyMap(i,quiet){
+  mapIdx=i;map=parseMap(MAPS[i]);
+  computeReach();
+  medkits=[];guns=[];booms=[];
+  const s=openSpot(0);p.x=s.x;p.y=s.y;
+  if(!quiet)toast('MAPA NOVO',2500);
 }
 
 // ============ enemies (host/solo authoritative) ============
@@ -412,19 +532,24 @@ function showBanner(txt,ms){
   if(ms)setTimeout(()=>{if(!dead)banner.style.opacity=0;},ms);
 }
 function enemySpot(){
-  // longe de TODOS os jogadores (host + remotos)
+  // zona alcançável + longe de TODOS os jogadores (host + remotos)
   for(let i=0;i<300;i++){
     const x=1.5+Math.random()*(MW-3),y=1.5+Math.random()*(MH-3);
-    if(!free(x,y,.35))continue;
+    if(!free(x,y,.35)||!reachable(x,y))continue;
     if(Math.hypot(x-p.x,y-p.y)<6)continue;
     let ok=true;
     for(const [,q] of NET.players)if(Math.hypot(x-q.x,y-q.y)<6){ok=false;break;}
     if(ok)return{x,y};
   }
-  return{x:1.5,y:1.5};
+  return anyReachSpot();
 }
 function spawnWave(){
   wave++;$('wave').textContent=wave;
+  // troca de mapa a cada 10 ondas
+  if(wave>1&&wave%10===0&&NET.mode!=='client'){
+    applyMap((mapIdx+1)%MAPS.length);
+    for(const [,c] of NET.conns){try{c.send({t:'map',i:mapIdx});}catch(_){}}
+  }
   const isBoss=wave%10===0;
   showBanner(isBoss?'ONDA '+wave+' — BOSS!':'ONDA '+wave,1800);
   tone(330,isBoss?165:660,.3,'triangle',.2);
@@ -447,11 +572,38 @@ function spawnWave(){
   }
   if(!dead)p.hp=Math.min(100,p.hp+15); // +15% por onda sobrevivida
 }
-function giveGun(k){
-  weapon=k;mag=WEAPONS[k].mag;reloading=0;$('rl').style.display='none';
+function updateSlots(){
+  $('wslots').innerHTML=inv.map((k,i)=>
+    '<span class="ws'+(k===weapon?' on':'')+'" style="border-color:'+WEAPONS[k].color+'">'+(i+1)+'</span>').join('');
+}
+function switchTo(k){
+  if(!inv.includes(k)||k===weapon)return;
+  mags[weapon]=mag;
+  weapon=k;mag=mags[k]!==undefined?mags[k]:WEAPONS[k].mag;
+  reloading=0;nextFire=Math.max(nextFire,time+.15);$('rl').style.display='none';
   $('wname').textContent=WEAPONS[k].name;
+  updateSlots();
+  tone(700,900,.05,'square',.15);
+}
+function cycleWeapon(dir){
+  if(inv.length<2)return;
+  switchTo(inv[(inv.indexOf(weapon)+dir+inv.length)%inv.length]);
+}
+function giveGun(k){
+  if(!inv.includes(k))inv.push(k);
+  mags[weapon]=mag;
+  mags[k]=WEAPONS[k].mag;
+  weapon=k;mag=mags[k];reloading=0;$('rl').style.display='none';
+  $('wname').textContent=WEAPONS[k].name;
+  updateSlots();
   toast(WEAPONS[k].name+' EQUIPADA',2200);
   tone(520,1040,.2,'square',.25);
+}
+function resetInv(){
+  inv=['shotgun'];mags={shotgun:WEAPONS.shotgun.mag};
+  weapon='shotgun';mag=WEAPONS.shotgun.mag;
+  $('wname').textContent=WEAPONS.shotgun.name;
+  updateSlots();
 }
 function heal(v){
   p.hp=Math.min(100,p.hp+v);
@@ -502,7 +654,7 @@ function hitEnemy(e,dmg){
 function explode(x,y,dmg,r){
   booms.push({x,y,t:time+.35});
   tone(60,25,.5,'sine',.5);noiseShot();
-  if(NET.mode==='client'){try{NET.conn.send({t:'boom',x,y,dmg,r});}catch(_){}
+  if(NET.mode==='client'){try{NET.conn.send({t:'boom',x,y});}catch(_){}
     // previsão local
     for(const e of enemies)if(Math.hypot(e.x-x,e.y-y)<r){e.hp-=dmg;e.hurtT=time+.13;}
     for(let i=enemies.length-1;i>=0;i--)if(enemies[i].hp<=0)enemies.splice(i,1);
@@ -546,6 +698,9 @@ function updateEnemiesHost(dt){
       else{try{NET.conns.get(tid)?.send({t:'d',dmg});}catch(_){}}
     }
   }
+  // spawn contínuo de pickups (independente das ondas)
+  if(time>mkT){mkT=time+6;if(medkits.length<5){const s=openSpot(3);medkits.push({id:mkId++,x:s.x,y:s.y});}}
+  if(time>gnT){gnT=time+9;if(guns.length<4){const s=openSpot(3);guns.push({id:gnId++,x:s.x,y:s.y,k:GUNKINDS[Math.random()*GUNKINDS.length|0]});}}
   updatePickupsHost();
   for(let i=0;i<enemies.length;i++)for(let j=i+1;j<enemies.length;j++){
     const a=enemies[i],b=enemies[j];
@@ -555,7 +710,11 @@ function updateEnemiesHost(dt){
   }
   if(enemies.length===0&&state==='play'){
     if(!nextWaveT)nextWaveT=time+2;
-    else if(time>nextWaveT){nextWaveT=0;score+=250;spawnWave();}
+    else if(time>nextWaveT){
+      nextWaveT=0;score+=250;
+      if(updatePending){doUpdate();return;}
+      spawnWave();
+    }
   }
   // multiplayer: todos mortos ao mesmo tempo = ronda perdida, recua uma onda
   if(NET.mode!=='solo'&&dead){
@@ -565,8 +724,15 @@ function updateEnemiesHost(dt){
   }
 }
 function respawnSelf(){
-  dead=false;p.hp=100;
-  mag=WEAPONS[weapon].mag;reloading=0;nextFire=0;$('rl').style.display='none';
+  // morrer = perder as armas apanhadas; voltam a spawnar algures no mapa
+  const dropped=inv.filter(k=>k!=='shotgun');
+  if(dropped.length){
+    if(NET.mode==='client'){try{NET.conn.send({t:'drop',ks:dropped});}catch(_){}}
+    else for(const k of dropped){const s=openSpot(3);guns.push({id:gnId++,x:s.x,y:s.y,k});}
+    toast('PERDESTE AS ARMAS',2500);
+  }
+  resetInv();
+  dead=false;p.hp=100;reloading=0;nextFire=0;$('rl').style.display='none';
   const s=openSpot(4);p.x=s.x;p.y=s.y;
   banner.style.opacity=0;
 }
@@ -586,9 +752,9 @@ function fire(){
   if(state!=='play'||dead||reloading>time||time<nextFire)return;
   if(mag<=0){startReload();return;}
   const WP=WEAPONS[weapon];
-  nextFire=time+WP.rate;mag--;flash=1;recoil=weapon==='mg'?.45:1;
-  if(weapon==='laser'){beamT=time+.09;tone(1400,180,.22,'sawtooth',.3);}
-  else noiseShot();
+  nextFire=time+WP.rate;mag--;
+  if(WP.beam){beamT=time+.16;flash=.25;recoil=.08;tone(950,780,.11,'sawtooth',.1);}
+  else{flash=1;recoil=weapon==='mg'?.45:1;noiseShot();}
   const wall=castRay(p.x,p.y,dirX,dirY).d;
   let hit=null,hd=1e9;
   for(const e of enemies){
@@ -607,7 +773,7 @@ function fire(){
       hit.hp-=WP.dmg;hit.hurtT=time+.13;
       if(hit.hp<=0){const i=enemies.indexOf(hit);if(i>=0)enemies.splice(i,1);tone(160,35,.3,'sawtooth',.25);}
       else tone(440,220,.08,'square',.2);
-      try{NET.conn.send({t:'h',id:hit.id,dmg:WP.dmg});}catch(_){}
+      try{NET.conn.send({t:'h',id:hit.id,w:weapon});}catch(_){}
     }else{
       const wasAlive=hit.hp>WP.dmg;
       hitEnemy(hit,WP.dmg);
@@ -654,12 +820,13 @@ function snapshot(){
   const pl={};
   pl[NET.peer.id]=[+p.x.toFixed(2),+p.y.toFixed(2),+p.a.toFixed(2),p.hp,myName,NET.myCol,dead?1:0];
   for(const [id,q] of NET.players)pl[id]=[+q.x.toFixed(2),+q.y.toFixed(2),q.a,q.hp,q.name,q.col,q.dead?1:0];
-  const m={t:'s',e,pl,w:wave,sc:score,
+  const m={t:'s',e,pl,w:wave,sc:score,mi:mapIdx,
     mk:medkits.map(o=>[o.id,+o.x.toFixed(2),+o.y.toFixed(2)]),
     gk:guns.map(o=>[o.id,+o.x.toFixed(2),+o.y.toFixed(2),o.k])};
   for(const [,c] of NET.conns){try{c.send(m);}catch(_){}}
 }
 function applySnapshot(m){
+  if(m.mi!==undefined&&m.mi!==mapIdx){applyMap(m.mi);enemies=[];}
   const seen=new Set();
   for(const [id,x,y,hp,sc] of m.e){
     seen.add(id);
@@ -687,11 +854,11 @@ function applySnapshot(m){
   }
   score=m.sc;
 }
-function startHost(){
+function startHost(resume,attempt){
   if(typeof Peer==='undefined'){toast('SEM REDE — PEERJS NÃO CARREGOU');return;}
   myName=getName();
   toast('A CRIAR SALA…');
-  const code=genCode();
+  const code=resume?resume.code:genCode();
   const peer=new Peer('bunker77-'+code,{debug:0});
   NET.peer=peer;
   peer.on('open',()=>{
@@ -700,10 +867,16 @@ function startHost(){
     if(navigator.clipboard)navigator.clipboard.writeText(NET.link)
       .then(()=>toast('LINK COPIADO — ENVIA AOS AMIGOS',4000)).catch(()=>{});
     peer.on('connection',onConn);
-    begin();
+    begin(resume);
   });
   peer.on('error',err=>{
-    if(err.type==='unavailable-id'){try{peer.destroy();}catch(_){}startHost();}
+    if(err.type==='unavailable-id'){
+      try{peer.destroy();}catch(_){}
+      if(resume){ // a retomar pós-update: o broker ainda guarda o id antigo — insistir no MESMO código
+        if((attempt||0)<8)setTimeout(()=>startHost(resume,(attempt||0)+1),1500);
+        else toast('NÃO DEU PARA RECUPERAR A SALA '+code);
+      }else startHost();
+    }
     else toast('ERRO DE REDE: '+err.type);
   });
 }
@@ -722,11 +895,16 @@ function onConn(conn){
       if(q){q.tx=m.x;q.ty=m.y;q.a=m.a;q.hp=m.hp;q.dead=m.dead;}
     }else if(m.t==='h'){
       const e=enemies.find(o=>o.id===m.id);
-      if(e)hitEnemy(e,Math.min(200,+m.dmg||50));
+      const W=WEAPONS[m.w]||WEAPONS.shotgun; // dano definido no host, não no cliente
+      if(e)hitEnemy(e,W.dmg);
     }else if(m.t==='boom'){
       booms.push({x:+m.x,y:+m.y,t:time+.35});
-      const r=Math.min(3,+m.r||2),dmg=Math.min(200,+m.dmg||160);
-      for(const e of enemies.slice())if(Math.hypot(e.x-m.x,e.y-m.y)<r)hitEnemy(e,dmg);
+      const B=WEAPONS.bazooka;
+      for(const e of enemies.slice())if(Math.hypot(e.x-m.x,e.y-m.y)<B.splash)hitEnemy(e,B.dmg);
+    }else if(m.t==='drop'){
+      // cliente morreu: as armas dele voltam ao mapa
+      const ks=(Array.isArray(m.ks)?m.ks:[]).filter(k=>GUNKINDS.includes(k)).slice(0,3);
+      for(const k of ks){const s=openSpot(3);guns.push({id:gnId++,x:s.x,y:s.y,k});}
     }
   });
   conn.on('close',()=>{
@@ -755,6 +933,12 @@ function startJoin(){
       else if(m.t==='heal')heal(m.v);
       else if(m.t==='gun')giveGun(m.k);
       else if(m.t==='lost'){respawnSelf();showBanner('RONDA PERDIDA',2000);toast('TODOS MORRERAM — RECUAM UMA ONDA',3500);tone(180,60,.6,'sawtooth',.35);}
+      else if(m.t==='map'){applyMap(m.i);enemies=[];}
+      else if(m.t==='upd'){
+        try{sessionStorage.b77resume=JSON.stringify({role:'client',code:NET.code,name:myName});}catch(_){}
+        toast('A ATUALIZAR O JOGO…');
+        setTimeout(()=>location.reload(),2500);
+      }
       else if(m.t==='full')toast('SALA CHEIA');
     });
     conn.on('close',()=>{if(joined&&state!=='menu'){toast('O ANFITRIÃO SAIU');backToMenu();}});
@@ -772,14 +956,17 @@ function netReset(){
 }
 
 // ============ game flow ============
-function begin(){
+function begin(resume){
   state='play';time=0;dead=false;
-  weapon='shotgun';mag=WEAPONS.shotgun.mag;reloading=0;nextFire=0;flash=0;recoil=0;beamT=0;
-  $('wname').textContent=WEAPONS.shotgun.name;
-  p.x=12.5;p.y=11.5;p.hp=100;setAngle(0);
-  enemies=[];medkits=[];guns=[];booms=[];
-  if(NET.mode!=='client'){score=0;wave=0;nextWaveT=0;spawnWave();}
-  else{score=0;wave=0;}
+  resetInv();reloading=0;nextFire=0;flash=0;recoil=0;beamT=0;
+  p.hp=100;setAngle(0);
+  enemies=[];mkT=0;gnT=0;
+  if(NET.mode!=='client'){
+    score=0;wave=0;nextWaveT=0;
+    applyMap(resume?(resume.mapIdx||0):0,true); // também posiciona o jogador
+    if(resume){wave=resume.wave||0;score=resume.score||0;}
+    spawnWave();
+  }else{score=0;wave=0;applyMap(0,true);}
   document.activeElement&&document.activeElement.blur();
   ov.style.display='none';hud.style.display='block';cross.style.display='block';
   $('rl').style.display='none';
@@ -787,7 +974,11 @@ function begin(){
   else $('roomBox').style.display='none';
   $('touch').style.display=MOBILE?'block':'none';
   startMusic();
-  lock();
+  if(resume&&!MOBILE){
+    // pós-update: o browser exige clique para voltar a prender o rato
+    state='pause';cross.style.display='none';showOverlay('pause');
+    toast('JOGO ATUALIZADO — CLICA PARA CONTINUAR',4000);
+  }else lock();
 }
 function lock(){if(MOBILE)return;try{const r=cv.requestPointerLock();r&&r.catch&&r.catch(()=>{});}catch(e){}}
 function showOverlay(kind){
@@ -858,12 +1049,62 @@ document.addEventListener('keydown',e=>{
   keys[e.code]=true;
   if(e.code==='KeyR'&&state==='play')startReload();
   if(e.code==='KeyM'&&document.activeElement&&document.activeElement.tagName!=='INPUT')setMuted(!muted);
+  if(state==='play'&&/^Digit[1-4]$/.test(e.code)){const i=+e.code[5]-1;if(inv[i])switchTo(inv[i]);}
 });
+document.addEventListener('wheel',e=>{if(state==='play')cycleWeapon(e.deltaY>0?1:-1);},{passive:true});
+$('ammobox').addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();if(state==='play')cycleWeapon(1);},{passive:false});
 document.addEventListener('keyup',e=>keys[e.code]=false);
 
 // auto-fill code from ?sala=
 const urlCode=new URLSearchParams(location.search).get('sala');
 if(urlCode){$('codein').value=urlCode.toUpperCase().slice(0,4);$('ctaJoin').textContent='ENTRAR NA SALA '+urlCode.toUpperCase().slice(0,4);}
+
+// ============ auto-update in-game ============
+// compara version.txt do deploy; aplica no fim da onda e retoma a partida sozinho
+let baseVer=null,updatePending=false;
+async function fetchVer(){
+  try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok)return null;return(await r.text()).trim();}catch(e){return null;}
+}
+fetchVer().then(v=>baseVer=v);
+setInterval(async()=>{
+  if(updatePending)return;
+  const v=await fetchVer();
+  if(v&&baseVer&&v!==baseVer){
+    updatePending=true;
+    if(state==='menu'||state==='over')location.reload();
+    else if(NET.mode!=='client')toast('VERSÃO NOVA — ATUALIZA NO FIM DA ONDA',5000);
+  }
+},60000);
+function doUpdate(){
+  const blob={role:NET.mode==='solo'?'solo':'host',code:NET.code,name:myName,wave,score,mapIdx};
+  if(NET.mode==='host')for(const [,c] of NET.conns){try{c.send({t:'upd'});}catch(_){}}
+  try{sessionStorage.b77resume=JSON.stringify(blob);}catch(_){}
+  toast('A ATUALIZAR O JOGO…');
+  setTimeout(()=>location.reload(),NET.mode==='host'?500:200);
+}
+// retomar partida depois de um update
+(function(){
+  let R=null;
+  try{R=JSON.parse(sessionStorage.b77resume||'null');sessionStorage.removeItem('b77resume');}catch(_){}
+  if(!R)return;
+  if(R.name){$('nm').value=R.name;myName=R.name;}
+  if(R.role==='solo'){netReset();begin(R);}
+  else if(R.role==='host')startHost(R);
+  else if(R.role==='client'&&R.code){
+    $('codein').value=R.code;
+    toast('A VOLTAR À SALA '+R.code+'…',6000);
+    let tries=0;
+    const t=setInterval(()=>{
+      if(NET.mode==='client'||tries>=5){clearInterval(t);return;}
+      tries++;netReset();startJoin();
+    },4000);
+    setTimeout(()=>startJoin(),2500); // dar tempo ao host de recriar a sala
+  }
+})();
+// pós-reload não há gesto: destrancar áudio no primeiro toque/clique/tecla
+for(const ev of ['pointerdown','keydown','touchstart'])
+  document.addEventListener(ev,()=>{try{ac().resume();}catch(e){}});
 
 // ============ touch (mobile) ============
 let joyId=null,lookId=null,joyOX=0,joyOY=0,joyVX=0,joyVY=0,lookPX=0;
@@ -1023,26 +1264,27 @@ function drawGun(){
   ctx.fillStyle='#3a2c1c';ctx.fillRect(bx-17,by+108,34,40);
 }
 function drawMini(){
+  const T=96/MW; // 3px por célula em mapas 32×32
   mctx.fillStyle='rgba(5,8,14,.9)';mctx.fillRect(0,0,96,96);
   for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)if(map[y][x]){
     mctx.fillStyle=map[y][x]===1?'#2c3648':map[y][x]===2?'#5c3a28':'#5a1c22';
-    mctx.fillRect(x*4,y*4,4,4);
+    mctx.fillRect(x*T,y*T,T,T);
   }
   mctx.fillStyle='#80ed99';
-  for(const m of medkits)mctx.fillRect(m.x*4-1.5,m.y*4-1.5,3,3);
+  for(const m of medkits)mctx.fillRect(m.x*T-1.5,m.y*T-1.5,3,3);
   mctx.fillStyle='#4cc9f0';
-  for(const g of guns)mctx.fillRect(g.x*4-1.5,g.y*4-1.5,3,3);
+  for(const g of guns)mctx.fillRect(g.x*T-1.5,g.y*T-1.5,3,3);
   mctx.fillStyle='#ff3b30';
-  for(const e of enemies){const s=e.sc&&e.sc>1?5:3;mctx.fillRect(e.x*4-s/2,e.y*4-s/2,s,s);}
+  for(const e of enemies){const s=e.sc&&e.sc>1?5:3;mctx.fillRect(e.x*T-s/2,e.y*T-s/2,s,s);}
   for(const [,q] of NET.players){
     if(q.dead)continue;
     mctx.fillStyle=COLORS[q.col%COLORS.length];
-    mctx.fillRect(q.x*4-2,q.y*4-2,4,4);
+    mctx.fillRect(q.x*T-2,q.y*T-2,4,4);
   }
   mctx.fillStyle=COLORS[NET.myCol%COLORS.length];
-  mctx.fillRect(p.x*4-2,p.y*4-2,4,4);
+  mctx.fillRect(p.x*T-2,p.y*T-2,4,4);
   mctx.strokeStyle=COLORS[NET.myCol%COLORS.length];mctx.beginPath();
-  mctx.moveTo(p.x*4,p.y*4);mctx.lineTo(p.x*4+dirX*7,p.y*4+dirY*7);mctx.stroke();
+  mctx.moveTo(p.x*T,p.y*T);mctx.lineTo(p.x*T+dirX*6,p.y*T+dirY*6);mctx.stroke();
 }
 
 // ============ loop ============
@@ -1100,9 +1342,11 @@ requestAnimationFrame(frame);
 
 // debug hook (headless tests)
 window.__dbg=()=>({state,mode:NET.mode,code:NET.code,players:NET.players.size,enemies:enemies.length,
-  wave,score,hp:p.hp,dead,px:+p.x.toFixed(2),py:+p.y.toFixed(2),mag,weapon,
-  medkits:medkits.length,guns:guns.length,mobile:MOBILE,music:!!musTimer,muted,
-  gMus:MUSG?MUSG.gain.value:null,gMaster:MG?MG.gain.value:null});
+  wave,score,hp:p.hp,dead,px:+p.x.toFixed(2),py:+p.y.toFixed(2),mag,weapon,inv:inv.slice(),
+  medkits:medkits.length,guns:guns.length,mapIdx,mobile:MOBILE,music:!!musTimer,muted,
+  gMus:MUSG?MUSG.gain.value:null,gMaster:MG?MG.gain.value:null,
+  enemiesReachable:enemies.every(e=>reachable(e.x,e.y))});
+window.__giveGun=giveGun;window.__hurt=v=>takeDamage(v);window.__wave=()=>{enemies=[];}; // hooks de teste
 </script>
 </body>
 </html>
