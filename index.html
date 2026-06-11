@@ -475,6 +475,10 @@ const THEMES=[
     step:.24,bass:[36.71,36.71,55,36.71,49,36.71,61.74,55],
     arp:[146.83,174.61,220,293.66,220,174.61],
     bassType:'triangle',bassVol:.46,arpType:'sine',arpVol:.16,hatEvery:8},
+  { // ESTRADA — synthwave de condução (~160bpm, lá menor)
+    step:.1875,bass:[55,55,82.41,55,73.42,55,65.41,82.41],
+    arp:[220,261.63,329.63,440,523.25,440],
+    bassType:'sawtooth',bassVol:.4,arpType:'square',arpVol:.12,hatEvery:2},
 ];
 const combatTheme=()=>mapIdx===3?4:mapIdx%3;
 function startMusic(){
@@ -483,7 +487,7 @@ function startMusic(){
   musTimer=setInterval(()=>{try{
     const a=ac();
     while(musNext<a.currentTime+.35){
-      const T=THEMES[dim==='bloco'?3:combatTheme()];
+      const T=THEMES[dim==='bloco'?3:dim==='carro'?5:combatTheme()];
       const b=T.bass[(musStep>>1)%T.bass.length];
       musNote(b,T.step*.95,T.bassType,T.bassVol,musNext);
       musNote(b/2,T.step,'sine',.5,musNext);
@@ -670,6 +674,7 @@ function moveBody(b,dx,dy,r,g){
 function groundAt(x,y,g){g=g||map;return g[y|0][x|0]>0?1:0;}
 function tryJump(){
   if(state!=='play'||dead)return;
+  if(dim==='carro'){D.horn();return;} // botão SALTO = buzina no carro
   if(dim==='bloco'){V.jump();return;}
   if(p.z>groundAt(p.x,p.y)+.02)return; // já no ar
   vz=2.65;tone(250,520,.1,'square',.12);
@@ -722,7 +727,7 @@ function genBloco(){
 }
 function enterBloco(){
   portalCd=time+2;mouseDown=false;
-  if(!V.enter(()=>exitBloco()))return; // sem THREE: fica no combate
+  if(!V.enter(()=>exitBloco(),()=>enterCarro()))return; // sem THREE: fica no combate
   dim='bloco';musStep=0;
   showBanner('MUNDO SECRETO',2200);
   toast('PARTE BLOCOS (disparo) · CONSTRÓI (botão direito / E / POR)',5000);
@@ -742,6 +747,30 @@ function exitBloco(){
   if(MOBILE)$('rBtn').textContent='R';
   $('mini').style.display='block';$('ammobox').style.display='block';
   $('wname').textContent=WEAPONS[weapon].name;updateSlots();
+}
+function enterCarro(){
+  portalCd=time+2;mouseDown=false;
+  if(!D.enter(()=>exitCarro())){toast('MUNDO 3D NÃO CARREGOU');return;}
+  V.exit();
+  dim='carro';musStep=0;
+  showBanner('LEIRIA — MUNDO ABERTO',2600);
+  toast(MOBILE?'JOYSTICK CONDUZ · FOGO = TRAVÃO DE MÃO · SALTO = BUZINA':'WASD CONDUZ · ESPAÇO = TRAVÃO DE MÃO · H = BUZINA',7000);
+  tone(220,880,.5,'sawtooth',.25);
+  $('mini').style.display='none';$('ammobox').style.display='block';
+  $('wname').textContent='JETTA MK2 · GASÓLEO';
+  $('wslots').innerHTML='';
+  cross.style.display='none';
+  if(MOBILE){$('rBtn').style.display='none';$('fireBtn').textContent='TRAVÃO';$('jumpBtn').textContent='📢';}
+}
+function exitCarro(){
+  D.exit();portalCd=time+2;mouseDown=false;
+  V.enter(()=>exitBloco(),()=>enterCarro(),{x:12.5,z:7.5}); // sai ao lado do portal xadrez
+  dim='bloco';musStep=0;
+  showBanner('DE VOLTA AOS BLOCOS',2000);
+  tone(880,220,.4,'sawtooth',.2);
+  $('ammobox').style.display='none';
+  cross.style.display='block';
+  if(MOBILE){$('rBtn').style.display='';$('rBtn').textContent='POR';$('fireBtn').textContent='FOGO';$('jumpBtn').textContent='SALTO';}
 }
 function updateBlockHud(){
   if(dim!=='bloco')return;
@@ -1096,6 +1125,7 @@ function roundLost(){
 // ============ combat ============
 function fire(){
   if(state!=='play'||dead)return;
+  if(dim==='carro')return; // no carro o clique é travão de mão (mouseDown)
   if(dim==='bloco'){V.tryBreak();return;} // no mundo secreto o disparo parte blocos
   if(reloading>time||time<nextFire)return;
   if(mag<=0){startReload();return;}
@@ -1185,6 +1215,10 @@ function getR3(){
   if(!R3){
     R3=new THREE.WebGLRenderer({canvas:cv3,antialias:!MOBILE});
     R3.setSize(1280,720,false);
+    R3.toneMapping=THREE.ACESFilmicToneMapping; // look cinematográfico em todos os mundos
+    R3.toneMappingExposure=1.22;
+    R3.shadowMap.enabled=!MOBILE; // sombras reais (só usadas no mundo de condução)
+    R3.shadowMap.type=THREE.PCFSoftShadowMap;
   }
   return R3;
 }
@@ -1195,8 +1229,8 @@ const V=(()=>{
   const HOT=[3,2,1,4,5,6];
   const TNAME={1:'PEDRA',2:'TERRA',3:'RELVA',4:'AREIA',5:'TRONCO',6:'FOLHAS'};
   let ready=false,active=false,scene,cam,renderer,vox,chunks=[],inv3={1:0,2:0,3:0,4:0,5:0,6:0},sel=0;
-  let yaw=0,pit=0,pos,vel,onGround=false,exitCb=null;
-  let hi,portal,portalT,meatS,npcs=[],parts=[],clouds=[],lastB=0,sunL;
+  let yaw=0,pit=0,pos,vel,onGround=false,exitCb=null,carCb=null;
+  let hi,portal,portalT,portal2,portal2T,meatS,npcs=[],parts=[],clouds=[],lastB=0,sunL;
   let matO,matW,atlas,waterTex,hand,handSwing=0;
   const idx=(x,y,z)=>(y*SZ+z)*SX+x;
   const get=(x,y,z)=>(x<0||z<0||y<0||x>=SX||z>=SZ||y>=SY)?0:vox[idx(x,y,z)];
@@ -1380,6 +1414,11 @@ const V=(()=>{
     portalT=document.createElement('canvas');portalT.width=32;portalT.height=48;
     portal=sprite(portalT,2,3);
     const pg=ground(6,8);portal.position.set(6.5,pg+1.5,8.5);scene.add(portal);
+    // portal do MUNDO ABERTO (xadrez de corrida) — leva ao racing de Leiria
+    portal2T=document.createElement('canvas');portal2T.width=32;portal2T.height=48;
+    portal2=sprite(portal2T,2,3);
+    const pg2=ground(12,5);portal2.position.set(12.5,pg2+1.5,5.5);scene.add(portal2);
+    const flag2=textSprite('🏁',1.3,'#fff');flag2.position.set(12.5,pg2+3.4,5.5);scene.add(flag2);
     // churrasco
     const gx=24,gz=24,gy=ground(gx,gz);
     vox[idx(gx,gy,gz)]=BL.stone;rebuildAt(gx,gz);
@@ -1581,6 +1620,18 @@ const V=(()=>{
     if(time>portalCd&&Math.hypot(pos.x-portal.position.x,pos.z-portal.position.z)<1.1&&Math.abs(pos.y-portal.position.y)<2.2){
       exitCb&&exitCb();return;
     }
+    // portal xadrez → mundo aberto de Leiria
+    const pg2=portal2T.getContext('2d');
+    const ph=(time*6|0)%2;
+    for(let r=0;r<6;r++)for(let c=0;c<4;c++){
+      pg2.fillStyle=(r+c+ph)%2?'#0c0e12':'#e9edf2';
+      pg2.fillRect(c*8,r*8,8,8);
+    }
+    pg2.fillStyle='rgba(60,140,255,'+(.25+Math.sin(time*4)*.15)+')';pg2.fillRect(0,0,32,48);
+    portal2.material.map.needsUpdate=true;
+    if(time>portalCd&&Math.hypot(pos.x-portal2.position.x,pos.z-portal2.position.z)<1.1&&Math.abs(pos.y-portal2.position.y)<2.2){
+      carCb&&carCb();return;
+    }
     // NPCs
     for(const n of npcs){
       const gy=ground(n.x,n.z);
@@ -1628,8 +1679,8 @@ const V=(()=>{
     for(const c of clouds){c.position.x+=dt*.5;if(c.position.x>SX+8)c.position.x=-8;}
     renderer.render(scene,cam);
   }
-  function enter(cb){
-    exitCb=cb;
+  function enter(cb,cc,near){
+    exitCb=cb;if(cc!==undefined)carCb=cc;
     if(!ready){
       if(typeof THREE==='undefined'){toast('MUNDO 3D NÃO CARREGOU (sem rede?)');return false;}
       init();
@@ -1637,7 +1688,9 @@ const V=(()=>{
     active=true;cv3.style.display='block';
     $('hotbar').style.display='flex';
     yaw=Math.PI;pit=0;
-    pos.set(8.5,ground(8,8)+2,8.5);vel.set(0,0,0);
+    if(near)pos.set(near.x,ground(near.x|0,near.z|0)+2,near.z);
+    else pos.set(8.5,ground(8,8)+2,8.5);
+    vel.set(0,0,0);
     updHotbar();
     return true;
   }
@@ -1649,6 +1702,400 @@ const V=(()=>{
     selectDelta:d=>select(sel+d),select:i=>select(i),
     get active(){return active},get ready(){return ready},
     dbg:()=>({active,ready,inv:{...inv3},sel:HOT[sel],px:+pos?.x.toFixed(1),py:+pos?.y.toFixed(1),pz:+pos?.z.toFixed(1),npcs:npcs.length})};
+})();
+
+// ============ MUNDO ABERTO LEIRIA (racing, Jetta MK2 a gasóleo) ============
+const D=(()=>{
+  const CHD=64,RAD=2; // chunks de 64m, raio 2 à volta do carro (mapa infinito)
+  let ready=false,active=false,scene,cam,sun,exitCb=null;
+  let car,wheelFL,wheelFR,wheelRL,wheelRR,carPos,heading=0,speed=0,steerV=0;
+  let smokes=[],smokeT=0,smokeTex,matFlat,roadTexH,roadTexV,riverMat;
+  let portalR,portalRT,portalPos;
+  let chunks=new Map();
+  let engOsc=null,engAm=null,engLfo=null,engGain=null,engLg=null;
+  const h2=(x,z,s)=>{ // hash determinístico por célula (mundo igual para todos)
+    let h=Math.imul(x|0,374761393)+Math.imul(z|0,668265263)+Math.imul((s||1)|0,974711);
+    h=Math.imul(h^(h>>>13),1274126177);
+    return ((h^(h>>>16))>>>0)/4294967295;
+  };
+  function texCanvas(w,h,fn){
+    const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'));
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
+  }
+  function roadTex(vert){
+    const t=texCanvas(64,64,g=>{
+      g.fillStyle='#34373c';g.fillRect(0,0,64,64);
+      for(let i=0;i<160;i++){g.fillStyle=Math.random()<.5?'rgba(20,22,25,.5)':'rgba(90,94,100,.35)';g.fillRect(Math.random()*64|0,Math.random()*64|0,2,1);}
+      g.fillStyle='#cfd3d8';
+      if(vert){g.fillRect(30,4,4,22);g.fillRect(30,38,4,22);g.fillStyle='#9aa0a8';g.fillRect(1,0,2,64);g.fillRect(61,0,2,64);}
+      else{g.fillRect(4,30,22,4);g.fillRect(38,30,22,4);g.fillStyle='#9aa0a8';g.fillRect(0,1,64,2);g.fillRect(0,61,64,2);}
+    });
+    t.wrapS=t.wrapT=THREE.RepeatWrapping;t.magFilter=THREE.NearestFilter;
+    if(vert)t.repeat.set(1,8);else t.repeat.set(8,1); // traço a cada 8 m
+    return t;
+  }
+  // emissão de geometria com cor por vértice (edifícios/pinheiros num só draw call por chunk)
+  function box(B,cx,cz,y0,y1,sx,sz,col){
+    const x0=cx-sx/2,x1=cx+sx/2,z0=cz-sz/2,z1=cz+sz/2;
+    const Q=(v,nx,ny,nz,k)=>{for(const i of [0,1,2,0,2,3]){B.P.push(...v[i]);B.N.push(nx,ny,nz);B.C.push(col[0]*k,col[1]*k,col[2]*k);}};
+    Q([[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]],0,0,-1,.82);
+    Q([[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],0,0,1,.95);
+    Q([[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]],1,0,0,.9);
+    Q([[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]],-1,0,0,.78);
+    Q([[x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0]],0,1,0,1);
+  }
+  function pyr(B,cx,cz,y0,y1,sx,sz,col){ // telhado de 4 águas / copa de pinheiro
+    const x0=cx-sx/2,x1=cx+sx/2,z0=cz-sz/2,z1=cz+sz/2;
+    const F=(a,b,k)=>{
+      B.P.push(...a,...b,cx,y1,cz);
+      for(let i=0;i<3;i++){B.N.push(0,.8,0);B.C.push(col[0]*k,col[1]*k,col[2]*k);}
+    };
+    F([x0,y0,z0],[x1,y0,z0],.85);F([x1,y0,z0],[x1,y0,z1],.95);
+    F([x1,y0,z1],[x0,y0,z1],1);F([x0,y0,z1],[x0,y0,z0],.8);
+  }
+  function pine(B,x,z,s){
+    box(B,x,z,0,1.6*s,.5*s,.5*s,[.32,.22,.12]);
+    pyr(B,x,z,1.2*s,3.4*s,2.6*s,2.6*s,[.1,.3,.13]);
+    pyr(B,x,z,2.4*s,4.3*s,1.8*s,1.8*s,[.12,.34,.15]);
+  }
+  function meshOf(B){
+    const ge=new THREE.BufferGeometry();
+    ge.setAttribute('position',new THREE.Float32BufferAttribute(B.P,3));
+    ge.setAttribute('normal',new THREE.Float32BufferAttribute(B.N,3));
+    ge.setAttribute('color',new THREE.Float32BufferAttribute(B.C,3));
+    const m=new THREE.Mesh(ge,matFlat);
+    m.castShadow=!MOBILE;m.receiveShadow=!MOBILE;
+    return m;
+  }
+  function textPlane(txt,w,h,bg,fg,big){
+    const t=texCanvas(256,128,g=>{
+      g.fillStyle=bg;g.fillRect(0,0,256,128);
+      g.fillStyle=fg;g.font='bold '+(big||52)+'px Arial';g.textAlign='center';g.textBaseline='middle';
+      g.fillText(txt,128,68);
+    });
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:t}));
+    return m;
+  }
+  function buildBP(g,obst){
+    // bomba de gasolina BP da Azoia — o spawn do mundo
+    const B={P:[],N:[],C:[]};
+    // pala branca com friso verde sobre as bombas
+    for(const [px,pz] of [[18,22],[30,22],[18,34],[30,34]])
+      box(B,px,pz,0,4.4,.5,.5,[.85,.87,.9]); // pilares
+    box(B,24,28,4.4,5.3,20,16,[.93,.95,.97]); // pala
+    box(B,24,28,4.2,4.45,20.4,16.4,[.04,.42,.2]); // friso verde
+    // ilhas com bombas de combustível
+    for(const pz of [24,32]){
+      box(B,24,pz,0,.18,12,2.2,[.75,.77,.8]);
+      for(const px of [20,24,28]){
+        box(B,px,pz,.18,1.7,.9,.65,[.9,.92,.94]);
+        box(B,px,pz,1.0,1.45,.96,.7,[.04,.42,.2]);
+      }
+    }
+    // loja
+    box(B,24,42,0,3.4,16,7,[.92,.93,.95]);
+    box(B,24,42,3.4,3.9,16.6,7.6,[.04,.42,.2]);
+    obst.push({x:24,z:42,hw:8,hd:3.5});
+    // totem de preços
+    box(B,10,20,0,7.2,1.2,.5,[.04,.42,.2]);
+    obst.push({x:10,z:20,hw:.8,hd:.6});
+    g.add(meshOf(B));
+    // logos e placas
+    const lg=textPlane('bp',3.2,3.2,'#0a6b33','#ffe600',92);
+    lg.position.set(10,5.6,20.3);g.add(lg);
+    const pr=textPlane('GASÓLEO 1.62',3.4,1.4,'#fff','#0a6b33',34);
+    pr.position.set(10,3.4,20.3);g.add(pr);
+    const fr=textPlane('bp AZOIA',7,1.6,'#0a6b33','#ffe600',56);
+    fr.position.set(24,4.85,36.2);g.add(fr);
+    const pl=textPlane('LEIRIA · AZOIA',6,1.6,'#1450a0','#fff',40);
+    pl.position.set(34,2.2,18);pl.rotation.y=Math.PI;g.add(pl);
+    // portal xadrez de regresso ao mundo dos blocos
+    portalRT=document.createElement('canvas');portalRT.width=32;portalRT.height=48;
+    const pt=new THREE.CanvasTexture(portalRT);pt.colorSpace=THREE.SRGBColorSpace;pt.magFilter=THREE.NearestFilter;
+    portalR=new THREE.Mesh(new THREE.PlaneGeometry(2.6,4.4),new THREE.MeshBasicMaterial({map:pt,side:THREE.DoubleSide}));
+    portalR.position.set(40,2.2,42);portalR.rotation.y=-Math.PI/2;g.add(portalR);
+    portalPos=new THREE.Vector3(40,0,42);
+  }
+  function buildCastle(g,obst){
+    // o castelo de Leiria num monte (marco fixo a norte)
+    const B={P:[],N:[],C:[]};
+    pyr(B,32,32,0,10,56,56,[.2,.34,.18]); // monte
+    box(B,32,32,9.5,15,16,13,[.62,.6,.55]); // muralha
+    box(B,32,32,9.5,21,6.5,6.5,[.66,.64,.58]); // torre de menagem
+    for(let i=-2;i<=2;i++){box(B,32+i*3,34.5,21,22.2,1.4,1.2,[.66,.64,.58]);box(B,32+i*3,29.5,21,22.2,1.4,1.2,[.66,.64,.58]);} // ameias
+    box(B,24,32,9.5,17,4.5,4.5,[.64,.62,.56]); // torre sineira
+    g.add(meshOf(B));
+    obst.push({x:32,z:32,hw:28,hd:28}); // o monte trava o carro
+  }
+  function buildChunk(cx,cz){
+    const key=cx+','+cz;
+    if(chunks.has(key))return;
+    const g=new THREE.Group();g.position.set(cx*CHD,0,cz*CHD);
+    const obst=[];
+    // estradas nas bordas norte e oeste de cada chunk = malha viária de 64 m
+    const rH=new THREE.Mesh(new THREE.PlaneGeometry(CHD,8),new THREE.MeshLambertMaterial({map:roadTexH}));
+    rH.rotation.x=-Math.PI/2;rH.position.set(CHD/2,.02,0);rH.receiveShadow=!MOBILE;g.add(rH);
+    const rV=new THREE.Mesh(new THREE.PlaneGeometry(8,CHD),new THREE.MeshLambertMaterial({map:roadTexV}));
+    rV.rotation.x=-Math.PI/2;rV.position.set(0,.02,CHD/2);rV.receiveShadow=!MOBILE;g.add(rV);
+    if(cx===0&&cz===0)buildBP(g,obst);
+    else if(cx===0&&cz===-2)buildCastle(g,obst);
+    else{
+      const urban=Math.abs(cx)<=2&&Math.abs(cz)<=2;
+      const B={P:[],N:[],C:[]};
+      const n=urban?(2+h2(cx,cz,7)*3|0):(h2(cx,cz,7)<.4?1+h2(cx,cz,8)*2|0:0);
+      for(let i=0;i<n;i++){
+        const lx=12+h2(cx,cz,20+i)*40,lz=12+h2(cx,cz,40+i)*40;
+        const w=6+h2(cx,cz,60+i)*7,d=6+h2(cx,cz,80+i)*7;
+        const ht=urban?3+h2(cx,cz,100+i)*8:3;
+        const tone=.86+h2(cx,cz,120+i)*.1; // caiado português
+        box(B,lx,lz,0,ht,w,d,[tone,tone*.97,tone*.88]);
+        pyr(B,lx,lz,ht,ht+2+h2(cx,cz,140+i),w+1.2,d+1.2,[.7,.32,.16]); // telha
+        obst.push({x:lx,z:lz,hw:w/2,hd:d/2});
+      }
+      // Pinhal de Leiria nos arredores
+      const nt=urban?2:5+h2(cx,cz,9)*9|0;
+      for(let i=0;i<nt;i++){
+        const tx=10+h2(cx,cz,200+i)*44,tz=10+h2(cx,cz,300+i)*44;
+        let clash=false;
+        for(const o of obst)if(Math.abs(tx-o.x)<o.hw+3&&Math.abs(tz-o.z)<o.hd+3)clash=true;
+        if(clash)continue;
+        pine(B,tx,tz,.8+h2(cx,cz,400+i)*.7);
+        obst.push({x:tx,z:tz,hw:.5,hd:.5});
+      }
+      // o rio Lis atravessa a fila de chunks a sul
+      if(cz===2){
+        const rv=new THREE.Mesh(new THREE.PlaneGeometry(CHD-10,12),riverMat);
+        rv.rotation.x=-Math.PI/2;rv.position.set(CHD/2,.015,CHD/2);g.add(rv);
+      }
+      if(B.P.length)g.add(meshOf(B));
+    }
+    // converter obstáculos para coordenadas de mundo
+    for(const o of obst){o.x+=cx*CHD;o.z+=cz*CHD;}
+    chunks.set(key,{g,obst});
+    scene.add(g);
+  }
+  function ensureChunks(){
+    const ccx=Math.floor(carPos.x/CHD),ccz=Math.floor(carPos.z/CHD);
+    for(let dx=-RAD;dx<=RAD;dx++)for(let dz=-RAD;dz<=RAD;dz++)buildChunk(ccx+dx,ccz+dz);
+    for(const [key,c] of chunks){
+      const [x,z]=key.split(',').map(Number);
+      if(Math.abs(x-ccx)>RAD+1||Math.abs(z-ccz)>RAD+1){
+        scene.remove(c.g);
+        c.g.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material&&o.material!==matFlat&&o.material!==riverMat)o.material.dispose&&o.material.dispose();});
+        chunks.delete(key);
+      }
+    }
+  }
+  function buildCar(){
+    car=new THREE.Group();
+    const white=new THREE.MeshPhongMaterial({color:0xe9e7e0,shininess:70,specular:0x666666});
+    const dark=new THREE.MeshPhongMaterial({color:0x15181d,shininess:30});
+    const glass=new THREE.MeshPhongMaterial({color:0x1c2c3a,shininess:120,specular:0xaaaaaa});
+    const mk=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=!MOBILE;car.add(m);return m;};
+    mk(new THREE.BoxGeometry(1.68,.5,4.35),white,0,.58,0);                    // corpo (3 volumes do MK2)
+    mk(new THREE.BoxGeometry(1.56,.46,1.95),white,0,1.05,-.12);               // cabine
+    mk(new THREE.BoxGeometry(1.46,.34,1.85),glass,0,1.07,-.12);               // vidros
+    mk(new THREE.BoxGeometry(1.7,.22,.5),dark,0,.42,2.08);                    // para-choques frente
+    mk(new THREE.BoxGeometry(1.7,.22,.5),dark,0,.42,-2.08);                   // para-choques trás
+    mk(new THREE.BoxGeometry(1.3,.2,.06),dark,0,.72,2.18);                    // grelha
+    const lightM=new THREE.MeshBasicMaterial({color:0xfff2c8});
+    mk(new THREE.BoxGeometry(.42,.16,.05),lightM,-.55,.72,2.2);               // faróis retangulares
+    mk(new THREE.BoxGeometry(.42,.16,.05),lightM,.55,.72,2.2);
+    const tailM=new THREE.MeshBasicMaterial({color:0x991111});
+    mk(new THREE.BoxGeometry(.46,.16,.05),tailM,-.5,.74,-2.2);
+    mk(new THREE.BoxGeometry(.46,.16,.05),tailM,.5,.74,-2.2);
+    mk(new THREE.CylinderGeometry(.05,.05,.3,8).rotateX(Math.PI/2),dark,-.5,.3,-2.2); // escape
+    const wg=new THREE.CylinderGeometry(.31,.31,.22,12).rotateZ(Math.PI/2);
+    const wm=new THREE.MeshPhongMaterial({color:0x0c0e10,shininess:18});
+    wheelFL=mk(wg,wm,-.8,.31,1.35);wheelFR=mk(wg,wm,.8,.31,1.35);
+    wheelRL=mk(wg,wm,-.8,.31,-1.35);wheelRR=mk(wg,wm,.8,.31,-1.35);
+    const plate=textPlane('LE-77-MK',.6,.16,'#fff','#111',44);
+    plate.position.set(0,.5,-2.21);plate.rotation.y=Math.PI;car.add(plate);
+    scene.add(car);
+  }
+  function init(){
+    getR3();
+    scene=new THREE.Scene();
+    scene.background=new THREE.Color(0x9cc8ee); // dia em Leiria
+    scene.fog=new THREE.Fog(0xb6d3ea,60,210);
+    cam=new THREE.PerspectiveCamera(62,16/9,.1,400);
+    scene.add(new THREE.AmbientLight(0xdfe8f2,.5));
+    scene.add(new THREE.HemisphereLight(0xbdd8f0,0x5a6b4a,.75));
+    sun=new THREE.DirectionalLight(0xfff3da,1.6);
+    sun.position.set(40,70,20);
+    if(!MOBILE){
+      sun.castShadow=true;
+      sun.shadow.mapSize.set(1024,1024);
+      sun.shadow.camera.left=-55;sun.shadow.camera.right=55;
+      sun.shadow.camera.top=55;sun.shadow.camera.bottom=-55;
+      sun.shadow.camera.far=220;sun.shadow.bias=-.0015;
+      sun.shadow.camera.updateProjectionMatrix();
+    }
+    scene.add(sun);scene.add(sun.target);
+    matFlat=new THREE.MeshLambertMaterial({vertexColors:true});
+    riverMat=new THREE.MeshLambertMaterial({color:0x3a78b8,transparent:true,opacity:.85});
+    roadTexH=roadTex(false);roadTexV=roadTex(true);
+    // chão infinito de relva (segue o carro)
+    const gt=texCanvas(128,128,g=>{
+      g.fillStyle='#46663a';g.fillRect(0,0,128,128);
+      for(let i=0;i<900;i++){g.fillStyle=Math.random()<.5?'rgba(96,128,72,.4)':'rgba(46,72,38,.45)';g.fillRect(Math.random()*128|0,Math.random()*128|0,2,2);}
+    });
+    gt.wrapS=gt.wrapT=THREE.RepeatWrapping;gt.repeat.set(220,220);gt.magFilter=THREE.NearestFilter;
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(1400,1400),new THREE.MeshLambertMaterial({map:gt}));
+    ground.rotation.x=-Math.PI/2;ground.position.y=-.02;ground.receiveShadow=!MOBILE;
+    scene.add(ground);
+    scene.userData.ground=ground;
+    // sol visível + nuvens
+    const sunSpr=new THREE.Sprite(new THREE.SpriteMaterial({map:texCanvas(64,64,g=>{
+      const gr=g.createRadialGradient(32,32,2,32,32,32);
+      gr.addColorStop(0,'rgba(255,252,235,1)');gr.addColorStop(.4,'rgba(255,240,180,.8)');gr.addColorStop(1,'rgba(255,230,150,0)');
+      g.fillStyle=gr;g.fillRect(0,0,64,64);
+    }),transparent:true,fog:false,depthWrite:false}));
+    sunSpr.scale.set(60,60,1);sunSpr.position.set(220,260,120);scene.add(sunSpr);
+    smokeTex=texCanvas(32,32,g=>{
+      const gr=g.createRadialGradient(16,16,2,16,16,16);
+      gr.addColorStop(0,'rgba(22,22,26,.85)');gr.addColorStop(.6,'rgba(30,30,34,.45)');gr.addColorStop(1,'rgba(34,34,38,0)');
+      g.fillStyle=gr;g.fillRect(0,0,32,32);
+    });
+    carPos=new THREE.Vector3(31,0,28); // ao lado das bombas da BP
+    buildCar();
+    ensureChunks();
+    ready=true;
+  }
+  function engineOn(){
+    if(engOsc)return;
+    try{
+      const a=ac();
+      engGain=a.createGain();engGain.gain.value=.001;engGain.connect(master());
+      engAm=a.createGain();engAm.gain.value=.55;engAm.connect(engGain);
+      engOsc=a.createOscillator();engOsc.type='sawtooth';engOsc.frequency.value=58;
+      engOsc.connect(engAm);engOsc.start();
+      engLfo=a.createOscillator();engLfo.type='square';engLfo.frequency.value=24; // tremor diesel
+      engLg=a.createGain();engLg.gain.value=.4;
+      engLfo.connect(engLg);engLg.connect(engAm.gain);engLfo.start();
+    }catch(e){}
+  }
+  function engineOff(){
+    try{engOsc&&engOsc.stop();engLfo&&engLfo.stop();engGain&&engGain.disconnect();}catch(e){}
+    engOsc=engLfo=engGain=engAm=engLg=null;
+  }
+  function horn(){
+    tone(415,400,.3,'square',.4);tone(522,510,.3,'square',.34);
+  }
+  function step(dt){
+    if(!active||!ready)return;
+    // condução arcade: WASD/setas; mobile: joystick (Y gás, X direção), FOGO = travão de mão
+    const fwd=(keys.KeyW||keys.ArrowUp?1:0)+Math.max(0,-joyVY);
+    const bwd=(keys.KeyS||keys.ArrowDown?1:0)+Math.max(0,joyVY);
+    const hb=keys.Space||mouseDown;
+    const st=(keys.KeyA||keys.ArrowLeft?1:0)-(keys.KeyD||keys.ArrowRight?1:0)-joyVX;
+    speed+=(fwd*10.5-speed*.22-bwd*(speed>1?16:0))*dt;
+    if(bwd&&speed<=1)speed=Math.max(-8,speed-7*dt); // marcha-atrás
+    if(hb)speed*=Math.pow(.4,dt);
+    speed=Math.min(39,speed); // ~140 km/h — gasóleo honesto
+    steerV+=(Math.max(-1,Math.min(1,st))-steerV)*Math.min(1,dt*7);
+    const grip=Math.min(1,Math.abs(speed)/7);
+    heading+=steerV*2*dt*grip*(speed<0?-1:1)*(hb?1.7:1);
+    carPos.x+=Math.sin(heading)*speed*dt;
+    carPos.z+=Math.cos(heading)*speed*dt;
+    // colisões com edifícios/árvores/marcos (círculo do carro vs AABB)
+    for(const [,c] of chunks)for(const o of c.obst){
+      const dx=carPos.x-o.x,dz=carPos.z-o.z;
+      const px=Math.max(-o.hw,Math.min(o.hw,dx)),pz=Math.max(-o.hd,Math.min(o.hd,dz));
+      const ex=dx-px,ez=dz-pz,d2=ex*ex+ez*ez;
+      if(d2<1.44&&d2>0){
+        const d=Math.sqrt(d2),push=1.2-d;
+        carPos.x+=ex/d*push;carPos.z+=ez/d*push;
+        if(Math.abs(speed)>4)tone(90,40,.12,'square',.3);
+        speed*=-.18;shakeA=Math.min(14,Math.abs(speed)*1.5+4);
+        break;
+      }
+    }
+    car.position.copy(carPos);
+    car.rotation.y=heading;
+    car.rotation.z=-steerV*Math.min(.06,Math.abs(speed)*.004); // inclina nas curvas
+    const spin=speed*dt/.31;
+    wheelFL.rotation.x+=spin;wheelFR.rotation.x+=spin;wheelRL.rotation.x+=spin;wheelRR.rotation.x+=spin;
+    wheelFL.rotation.y=steerV*.42;wheelFR.rotation.y=steerV*.42;
+    // câmara de perseguição
+    const back=7.2+Math.abs(speed)*.06;
+    const tx=carPos.x-Math.sin(heading)*back,tz=carPos.z-Math.cos(heading)*back;
+    const k=1-Math.exp(-dt*4.5);
+    cam.position.x+=(tx-cam.position.x)*k;
+    cam.position.y+=(2.9+Math.abs(speed)*.02-cam.position.y)*k;
+    cam.position.z+=(tz-cam.position.z)*k;
+    cam.lookAt(carPos.x+Math.sin(heading)*4,1.1,carPos.z+Math.cos(heading)*4);
+    const fov=62+Math.abs(speed)*.32;
+    if(Math.abs(cam.fov-fov)>.3){cam.fov=fov;cam.updateProjectionMatrix();}
+    // FUMO PRETO do escape (gasóleo dos bons)
+    const puffEvery=fwd>0?.04:.15;
+    if(time>smokeT){
+      smokeT=time+puffEvery;
+      const m=new THREE.Sprite(new THREE.SpriteMaterial({map:smokeTex,transparent:true,depthWrite:false}));
+      const s0=.34+Math.random()*.2;
+      m.scale.set(s0,s0,1);
+      const cs=Math.cos(heading),sn=Math.sin(heading);
+      m.position.set(carPos.x+(-.5*cs)-sn*2.15,.36,carPos.z+(.5*sn)-cs*2.15);
+      scene.add(m);
+      smokes.push({m,t:time+2,vy:.7+Math.random()*.4,vx:-Math.sin(heading)*1.4,vz:-Math.cos(heading)*1.4,g:1.1+fwd});
+    }
+    for(let i=smokes.length-1;i>=0;i--){
+      const s=smokes[i],kk=Math.max(0,(s.t-time)/2);
+      s.m.position.y+=s.vy*dt;s.m.position.x+=s.vx*dt*kk;s.m.position.z+=s.vz*dt*kk;
+      const sc=s.m.scale.x+dt*(2.2*s.g);
+      s.m.scale.set(sc,sc,1);
+      s.m.material.opacity=.85*kk;
+      if(s.t<time){scene.remove(s.m);s.m.material.dispose();smokes.splice(i,1);}
+    }
+    // motor diesel
+    if(engOsc){
+      engOsc.frequency.value=56+Math.abs(speed)*2.6+fwd*22;
+      engLfo.frequency.value=21+Math.abs(speed)*1.2;
+      engGain.gain.value=.05+fwd*.05+Math.abs(speed)*.0012;
+    }
+    // portal xadrez de regresso
+    if(portalRT){
+      const pg=portalRT.getContext('2d');
+      const ph=(time*6|0)%2;
+      for(let r=0;r<6;r++)for(let c2=0;c2<4;c2++){
+        pg.fillStyle=(r+c2+ph)%2?'#0c0e12':'#e9edf2';
+        pg.fillRect(c2*8,r*8,8,8);
+      }
+      portalR.material.map.needsUpdate=true;
+      if(time>portalCd&&Math.hypot(carPos.x-portalPos.x,carPos.z-portalPos.z)<3)
+        {exitCb&&exitCb();return;}
+    }
+    // sol, sombras e relva infinita seguem o carro (relva alinhada à grelha da textura)
+    sun.position.set(carPos.x+40,70,carPos.z+20);
+    sun.target.position.copy(carPos);
+    const tile=1400/220,gr2=scene.userData.ground;
+    gr2.position.x=Math.round(carPos.x/tile)*tile;
+    gr2.position.z=Math.round(carPos.z/tile)*tile;
+    ensureChunks();
+    getR3().render(scene,cam);
+  }
+  function enter(cb){
+    exitCb=cb;
+    if(!ready){
+      if(typeof THREE==='undefined')return false;
+      try{init();}catch(e){return false;}
+    }
+    active=true;cv3.style.display='block';
+    carPos.set(31,0,28);heading=Math.PI/2;speed=0;steerV=0;
+    cam.position.set(carPos.x-7,3,carPos.z);
+    engineOn();
+    return true;
+  }
+  function exit(){
+    active=false;
+    engineOff();
+    for(const s of smokes){scene.remove(s.m);s.m.material.dispose();}
+    smokes=[];
+  }
+  return{enter,exit,step,horn,
+    kmh:()=>Math.abs(Math.round(speed*3.6)),
+    tp:(x,z,h)=>{carPos.set(x,0,z);if(h!==undefined)heading=h;speed=0;},
+    get active(){return active},get ready(){return ready}};
 })();
 
 // ============ COMBATE 3D (high-poly WebGL) ============
@@ -2097,7 +2544,7 @@ function nextCol(){
 function snapshot(){
   const e=enemies.map(o=>[o.id,+o.x.toFixed(2),+o.y.toFixed(2),o.hp,o.sc||1,o.sk||0]);
   const pl={};
-  pl[NET.peer.id]=[+p.x.toFixed(2),+p.y.toFixed(2),+p.a.toFixed(2),p.hp,myName,NET.myCol,dead?1:0,+p.z.toFixed(2),dim==='bloco'?1:0];
+  pl[NET.peer.id]=[+p.x.toFixed(2),+p.y.toFixed(2),+p.a.toFixed(2),p.hp,myName,NET.myCol,dead?1:0,+p.z.toFixed(2),dim!=='combat'?1:0];
   for(const [id,q] of NET.players)pl[id]=[+q.x.toFixed(2),+q.y.toFixed(2),q.a,q.hp,q.name,q.col,q.dead?1:0,+(q.z||0).toFixed(2),q.sw?1:0];
   const m={t:'s',e,pl,w:wave,sc:score,mi:mapIdx,
     mk:medkits.map(o=>[o.id,+o.x.toFixed(2),+o.y.toFixed(2)]),
@@ -2240,8 +2687,10 @@ function netReset(){
 // ============ game flow ============
 function begin(resume){
   state='play';time=0;dead=false;
+  if(dim==='carro')D.exit();
   if(dim==='bloco')V.exit();
   dim='combat';portalCd=0;
+  if(MOBILE){$('rBtn').style.display='';$('fireBtn').textContent='FOGO';$('jumpBtn').textContent='SALTO';}
   if(typeof THREE!=='undefined'){try{C3.ensure();cv3.style.display='block';}catch(_){}} // combate é 3D (fallback: raycaster 2D)
   $('mini').style.display='block';$('ammobox').style.display='block';
   if(MOBILE)$('rBtn').textContent='R';
@@ -2292,7 +2741,9 @@ function gameOver(){
 function backToMenu(){
   state='menu';dead=false;banner.style.opacity=0;stopMusic();
   document.exitPointerLock&&document.exitPointerLock();
-  if(dim==='bloco'){V.exit();dim='combat';}
+  if(dim==='carro')D.exit();
+  if(dim==='bloco')V.exit();
+  dim='combat';
   cv3.style.display='none';
   hud.style.display='none';cross.style.display='none';
   $('touch').style.display='none';
@@ -2331,6 +2782,7 @@ document.addEventListener('pointerlockchange',()=>{
 });
 document.addEventListener('mousemove',e=>{
   if(state!=='play'||document.pointerLockElement!==cv)return;
+  if(dim==='carro')return; // o carro guia-se ao teclado
   if(dim==='bloco'){V.look(e.movementX,e.movementY);return;}
   setAngle(p.a+e.movementX*.0023);
   pitC=Math.max(-1.3,Math.min(1.3,pitC-e.movementY*.0023));
@@ -2344,20 +2796,21 @@ document.addEventListener('contextmenu',e=>{if(state==='play')e.preventDefault()
 document.addEventListener('mouseup',()=>mouseDown=false);
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
-  if(e.code==='KeyR'&&state==='play'){if(dim==='bloco')placeBlock();else startReload();}
-  if(e.code==='Space'&&state==='play'){e.preventDefault();tryJump();}
+  if(e.code==='KeyR'&&state==='play'){if(dim==='bloco')placeBlock();else if(dim==='combat')startReload();}
+  if(e.code==='Space'&&state==='play'){e.preventDefault();if(dim!=='carro')tryJump();} // no carro Espaço = travão de mão
+  if(e.code==='KeyH'&&state==='play'&&dim==='carro')D.horn();
   if(e.code==='KeyM'&&document.activeElement&&document.activeElement.tagName!=='INPUT')setMuted(!muted);
   if(state==='play'&&/^Digit[1-6]$/.test(e.code)){
     const i=+e.code[5]-1;
     if(dim==='bloco')V.select(i);
-    else if(inv[i])switchTo(inv[i]);
+    else if(dim==='combat'&&inv[i])switchTo(inv[i]);
   }
   if(e.code==='KeyE'&&state==='play'&&dim==='bloco')placeBlock();
 });
 document.addEventListener('wheel',e=>{
   if(state!=='play')return;
   if(dim==='bloco')V.selectDelta(e.deltaY>0?1:-1);
-  else cycleWeapon(e.deltaY>0?1:-1);
+  else if(dim==='combat')cycleWeapon(e.deltaY>0?1:-1);
 },{passive:true});
 $('ammobox').addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();if(state!=='play')return;cycleWeapon(1);},{passive:false});
 document.addEventListener('keyup',e=>keys[e.code]=false);
@@ -2461,7 +2914,7 @@ if(MOBILE){
         if(state==='play'){
           const dx=t.clientX-lookPX,dy=t.clientY-lookPY;
           if(dim==='bloco')V.look(dx*1.95,dy*1.95);
-          else{setAngle(p.a+dx*.0045);pitC=Math.max(-1.3,Math.min(1.3,pitC-dy*.0045));}
+          else if(dim==='combat'){setAngle(p.a+dx*.0045);pitC=Math.max(-1.3,Math.min(1.3,pitC-dy*.0045));}
         }
         lookPX=t.clientX;lookPY=t.clientY;
       }
@@ -2490,7 +2943,7 @@ if(MOBILE){
 
 // ============ render ============
 function render(){
-  if(dim==='bloco'){ctx.clearRect(0,0,W,H);return;} // mundo de blocos: só WebGL (#c3)
+  if(dim!=='combat'){ctx.clearRect(0,0,W,H);return;} // blocos/carro: só WebGL (#c3)
   if(C3.ready){
     // combate em 3D real: o canvas 2D passa a ser só overlay (arma + laser + minimapa)
     if(state==='play')C3.step(dtR);
@@ -2757,6 +3210,9 @@ function frame(now){
     if(!dead&&dim==='bloco'){
       moving=false;
       if(V.ready&&V.active)V.step(dt);
+    }else if(!dead&&dim==='carro'){
+      moving=false;
+      if(D.ready&&D.active)D.step(dt);
     }else if(!dead){
       const joyM=Math.hypot(joyVX,joyVY);
       const spd=(keys.ShiftLeft||keys.ShiftRight||joyM>.92?4.8:3.2)*dt;
@@ -2812,11 +3268,12 @@ function frame(now){
     if(NET.mode==='host'&&time-NET.lastSnap>.08){NET.lastSnap=time;snapshot();}
     if(NET.mode==='client'&&NET.conn&&time-NET.lastSend>.08){
       NET.lastSend=time;
-      try{NET.conn.send({t:'p',x:+p.x.toFixed(2),y:+p.y.toFixed(2),a:+p.a.toFixed(2),hp:p.hp,dead:dead?1:0,z:+p.z.toFixed(2),sw:dim==='bloco'?1:0});}catch(_){}
+      try{NET.conn.send({t:'p',x:+p.x.toFixed(2),y:+p.y.toFixed(2),a:+p.a.toFixed(2),hp:p.hp,dead:dead?1:0,z:+p.z.toFixed(2),sw:dim!=='combat'?1:0});}catch(_){}
     }
     // hud
     $('score').textContent=score;
     if(dim==='combat')$('ammo').innerHTML=mag+'<small> / '+WEAPONS[weapon].mag+(weapon==='laser'?' ×'+(laserMags+1):'')+'</small>';
+    else if(dim==='carro')$('ammo').innerHTML=D.kmh()+'<small> km/h</small>';
     const hp=Math.max(0,p.hp);
     $('hpfill').style.width=hp+'%';
     $('hpbox').classList.toggle('low',hp<=30);
@@ -2833,7 +3290,7 @@ window.__dbg=()=>({state,mode:NET.mode,code:NET.code,players:NET.players.size,en
   medkits:medkits.length,guns:guns.length,mapIdx,mobile:MOBILE,music:!!musTimer,muted,dim,starLeft:Math.max(0,Math.ceil(starT-time)),pitC:+pitC.toFixed(2),c3:C3.ready,vox:V.ready?V.dbg():null,door:doorPos?[+doorPos.x.toFixed(1),+doorPos.y.toFixed(1)]:null,
   gMus:MUSG?MUSG.gain.value:null,gMaster:MG?MG.gain.value:null,
   enemiesReachable:enemies.every(e=>reachable(e.x,e.y))});
-window.__giveGun=giveGun;window.__hurt=v=>takeDamage(v);window.__wave=()=>{enemies=[];};window.__map=i=>applyMap(i);window.__fire=()=>fire();window.__star=giveBoost;window.__jump=tryJump;window.__door=()=>enterBloco();window.__tp=(x,y,a)=>{p.x=x;p.y=y;if(a!==undefined)setAngle(a);};window.__place=placeBlock;window.__V=V;window.__pitch=v=>{pitC=v;}; // hooks de teste
+window.__giveGun=giveGun;window.__hurt=v=>takeDamage(v);window.__wave=()=>{enemies=[];};window.__map=i=>applyMap(i);window.__fire=()=>fire();window.__star=giveBoost;window.__jump=tryJump;window.__door=()=>enterBloco();window.__tp=(x,y,a)=>{p.x=x;p.y=y;if(a!==undefined)setAngle(a);};window.__place=placeBlock;window.__V=V;window.__pitch=v=>{pitC=v;};window.__car=()=>enterCarro();window.__D=D; // hooks de teste
 </script>
 </body>
 </html>
