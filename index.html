@@ -214,6 +214,23 @@ function makeImp(hurt){
   return s;
 }
 const IMP=makeImp(false),IMPH=makeImp(true);
+// foto do amigo substitui o monstro quando carregar (fallback: imp desenhado)
+let AMIGO=null,AMIGOH=null;
+(function(){
+  const im=new Image();
+  im.onload=()=>{
+    const mk=tint=>{
+      const s=Math.max(im.width,im.height);
+      const c=document.createElement('canvas');c.width=c.height=s;
+      const g=c.getContext('2d');
+      g.drawImage(im,(s-im.width)/2,s-im.height,im.width,im.height);
+      if(tint){g.globalCompositeOperation='source-atop';g.fillStyle='rgba(255,255,255,.75)';g.fillRect(0,0,s,s);}
+      return c;
+    };
+    AMIGO=mk(false);AMIGOH=mk(true);
+  };
+  im.src='amigo.png';
+})();
 function makeMarine(col){
   const s=document.createElement('canvas');s.width=64;s.height=64;const g=s.getContext('2d');
   g.fillStyle='#1a1f29';g.fillRect(22,46,7,18);g.fillRect(35,46,7,18);
@@ -619,12 +636,15 @@ function render(){
     const bob=sp.kind==='e'?Math.sin(time*6+sp.ref.bob)*size*.02:0;
     const top=H/2+size/2-sh+bob;
     const left=scx-sw/2;
-    const img=sp.kind==='e'?(time<sp.ref.hurtT?IMPH:IMP):MARINES[sp.ref.col%COLORS.length];
+    const img=sp.kind==='e'
+      ?(time<sp.ref.hurtT?(AMIGOH||IMPH):(AMIGO||IMP))
+      :MARINES[sp.ref.col%COLORS.length];
+    const SS=img.width;
     ctx.globalAlpha=Math.max(.3,Math.min(1,1.5-trY*.08));
-    const srcW=Math.max(.5,64*COL/sw);
+    const srcW=Math.max(.5,SS*COL/sw);
     for(let x=Math.max(0,left|0);x<Math.min(W,left+sw);x+=COL){
       if(zbuf[x]<=trY)continue;
-      ctx.drawImage(img,(x-left)/sw*64,0,srcW,64,x,top,COL,sh);
+      ctx.drawImage(img,(x-left)/sw*SS,0,srcW,SS,x,top,COL,sh);
     }
     ctx.globalAlpha=1;
     if(sp.kind==='p'&&scx>=0&&scx<W&&zbuf[scx|0]>trY&&trY<10){
