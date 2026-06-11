@@ -32,7 +32,8 @@ A ligação é direta entre browsers (WebRTC via PeerJS) — não há servidor d
 - Armas para apanhar: metralhadora, raio laser (feixe contínuo) e bazooka (explosão em área). Troca com 1-4, scroll ou toque na munição. Morrer = perder as armas (voltam a aparecer no mapa).
 - Boss gigante a cada 10 ondas (+1000 pontos) e mudança de mapa (3 mapas em rotação).
 - Em multiplayer: respawn em 5 s com balas cheias; se morrerem todos ao mesmo tempo, a equipa recua uma onda.
-- Música procedural com botão de mute (🔊 / tecla M).
+- Música procedural própria por mapa, com mute só da música (tecla M).
+- Salto (Espaço / botão SALTO) e boost de salto ×3 no mapa — dá para subir para cima das paredes.
 
 ## Tecnologia
 
