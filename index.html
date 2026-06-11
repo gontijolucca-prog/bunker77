@@ -301,11 +301,11 @@ let state='menu',time=0,score=0,wave=0,best=+(localStorage.b77||0);
 const WEAPONS={
   shotgun:{name:'CAÇADEIRA',dmg:50,rate:.28,mag:8,rel:.65,color:'#2b3445'},
   mg:{name:'METRALHADORA',dmg:22,rate:.09,mag:40,rel:.85,color:'#4cc9f0'},
-  laser:{name:'RAIO LASER',dmg:28,rate:.12,mag:60,rel:.9,beam:true,color:'#ff3b30'}, // beam contínuo ~230 dano/s
+  laser:{name:'RAIO LASER',dmg:99999,rate:.4,mag:5,rel:.9,beam:true,color:'#ff3b30'}, // insta-kill; 3 carregadores e esgota
   bazooka:{name:'BAZOOKA',dmg:160,rate:1,mag:3,rel:1.1,splash:2.2,color:'#ffd166'},
 };
 const GUNKINDS=['mg','laser','bazooka'];
-let weapon='shotgun',mag=8,inv=['shotgun'],mags={shotgun:8};
+let weapon='shotgun',mag=8,inv=['shotgun'],mags={shotgun:8},laserMags=0;
 let reloading=0,nextFire=0,flash=0,recoil=0,mouseDown=false,beamT=0;
 let enemies=[],medkits=[],guns=[],booms=[],nextWaveT=0,moving=false,dead=false,deadUntil=0,eid=1,mkId=1,gnId=1;
 let mkT=0,gnT=0,reach=null;
@@ -608,14 +608,27 @@ function giveGun(k){
   if(!inv.includes(k))inv.push(k);
   mags[weapon]=mag;
   mags[k]=WEAPONS[k].mag;
+  if(k==='laser')laserMags=2; // carregador metido + 2 reloads = 3 magazines
   weapon=k;mag=mags[k];reloading=0;$('rl').style.display='none';
   $('wname').textContent=WEAPONS[k].name;
   updateSlots();
   toast(WEAPONS[k].name+' EQUIPADA',2200);
   tone(520,1040,.2,'square',.25);
 }
+function loseLaser(){
+  const i=inv.indexOf('laser');if(i>=0)inv.splice(i,1);
+  delete mags.laser;laserMags=0;
+  if(weapon==='laser'){
+    weapon='shotgun';mag=mags.shotgun!==undefined?mags.shotgun:WEAPONS.shotgun.mag;
+    reloading=0;$('rl').style.display='none';
+    $('wname').textContent=WEAPONS.shotgun.name;
+  }
+  updateSlots();
+  toast('LASER ESGOTADO — APANHA OUTRO NO MAPA',3000);
+  tone(500,120,.4,'sawtooth',.25);
+}
 function resetInv(){
-  inv=['shotgun'];mags={shotgun:WEAPONS.shotgun.mag};
+  inv=['shotgun'];mags={shotgun:WEAPONS.shotgun.mag};laserMags=0;
   weapon='shotgun';mag=WEAPONS.shotgun.mag;
   $('wname').textContent=WEAPONS.shotgun.name;
   updateSlots();
@@ -795,11 +808,18 @@ function fire(){
       if(wasAlive)tone(440,220,.08,'square',.2);else tone(160,35,.3,'sawtooth',.25);
     }
   }
-  if(mag===0)startReload();
+  if(mag===0){
+    if(weapon==='laser'&&laserMags<=0)loseLaser();
+    else startReload();
+  }
 }
 function startReload(){
   const WP=WEAPONS[weapon];
   if(reloading>time||mag===WP.mag)return;
+  if(weapon==='laser'){
+    if(laserMags<=0){if(mag===0)loseLaser();else toast('ÚLTIMO CARREGADOR DO LASER',2000);return;}
+    laserMags--;
+  }
   reloading=time+WP.rel;$('rl').style.display='block';
   tone(600,500,.04,'square',.15);
   setTimeout(()=>{if(state==='play')tone(700,800,.04,'square',.15);},WP.rel*800);
@@ -1344,7 +1364,7 @@ function frame(now){
     }
     // hud
     $('score').textContent=score;
-    $('ammo').innerHTML=mag+'<small> / '+WEAPONS[weapon].mag+'</small>';
+    $('ammo').innerHTML=mag+'<small> / '+WEAPONS[weapon].mag+(weapon==='laser'?' ×'+(laserMags+1):'')+'</small>';
     const hp=Math.max(0,p.hp);
     $('hpfill').style.width=hp+'%';
     $('hpfill').style.background=hp>40?'var(--ac2)':'var(--ac)';
@@ -1357,11 +1377,11 @@ requestAnimationFrame(frame);
 
 // debug hook (headless tests)
 window.__dbg=()=>({state,mode:NET.mode,code:NET.code,players:NET.players.size,enemies:enemies.length,
-  wave,score,hp:p.hp,dead,px:+p.x.toFixed(2),py:+p.y.toFixed(2),mag,weapon,inv:inv.slice(),
+  wave,score,hp:p.hp,dead,px:+p.x.toFixed(2),py:+p.y.toFixed(2),mag,weapon,inv:inv.slice(),laserMags,
   medkits:medkits.length,guns:guns.length,mapIdx,mobile:MOBILE,music:!!musTimer,muted,
   gMus:MUSG?MUSG.gain.value:null,gMaster:MG?MG.gain.value:null,
   enemiesReachable:enemies.every(e=>reachable(e.x,e.y))});
-window.__giveGun=giveGun;window.__hurt=v=>takeDamage(v);window.__wave=()=>{enemies=[];};window.__map=i=>applyMap(i); // hooks de teste
+window.__giveGun=giveGun;window.__hurt=v=>takeDamage(v);window.__wave=()=>{enemies=[];};window.__map=i=>applyMap(i);window.__fire=()=>fire(); // hooks de teste
 </script>
 </body>
 </html>
