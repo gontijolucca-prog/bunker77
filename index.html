@@ -146,7 +146,7 @@ html,body{height:100%;background:var(--bg);overflow:hidden;font-family:"Courier 
 <div id="ov">
   <h1>BUNKER <span>77</span></h1>
   <div class="sub">SOBREVIVE ÀS ONDAS — JUNTOS</div>
-  <div class="keys"><b>WASD</b> mover · <b>RATO</b> apontar · <b>CLIQUE</b> disparar · <b>R</b> recarregar · <b>SHIFT</b> correr · <b>M</b> som</div>
+  <div class="keys"><b>WASD</b> mover · <b>RATO</b> apontar · <b>CLIQUE</b> disparar · <b>R</b> recarregar · <b>SHIFT</b> correr · <b>M</b> música</div>
   <div class="final" id="finalTxt"></div>
   <div id="pauseHint">PAUSA — CLICA PARA CONTINUAR</div>
   <div id="linkRow"><div id="linkTxt"></div><button class="cta alt" id="copyBtn">COPIAR LINK DA SALA</button></div>
@@ -237,14 +237,15 @@ let AC=null,MG=null,muted=localStorage.b77mute==='1';
 const ac=()=>AC||(AC=new (window.AudioContext||window.webkitAudioContext)());
 function master(){
   const a=ac();
-  if(!MG){MG=a.createGain();MG.gain.value=muted?0:1;MG.connect(a.destination);}
+  if(!MG){MG=a.createGain();MG.gain.value=1;MG.connect(a.destination);}
   return MG;
 }
 function setMuted(m){
+  // silencia SÓ a música — efeitos (tiros, hits) ficam no master
   muted=m;localStorage.b77mute=m?'1':'0';
-  if(MG)MG.gain.value=m?0:1;
-  $('muteBtn').textContent=m?'🔇':'🔊';
-  $('muteCta').textContent='SOM: '+(m?'DESLIGADO':'LIGADO');
+  if(MUSG)MUSG.gain.value=m?0:.33;
+  $('muteBtn').textContent=m?'🔇':'🎵';
+  $('muteCta').textContent='MÚSICA: '+(m?'DESLIGADA':'LIGADA');
 }
 function tone(f0,f1,dur,type,vol){try{
   const a=ac(),o=a.createOscillator(),g=a.createGain(),t=a.currentTime;
@@ -264,7 +265,7 @@ function noiseShot(){try{
 let MUSG=null,musTimer=null,musStep=0,musNext=0;
 function musGain(){
   const a=ac();
-  if(!MUSG){MUSG=a.createGain();MUSG.gain.value=.33;MUSG.connect(master());}
+  if(!MUSG){MUSG=a.createGain();MUSG.gain.value=muted?0:.33;MUSG.connect(master());}
   return MUSG;
 }
 function musNote(f,dur,type,vol,when){try{
@@ -1100,7 +1101,8 @@ requestAnimationFrame(frame);
 // debug hook (headless tests)
 window.__dbg=()=>({state,mode:NET.mode,code:NET.code,players:NET.players.size,enemies:enemies.length,
   wave,score,hp:p.hp,dead,px:+p.x.toFixed(2),py:+p.y.toFixed(2),mag,weapon,
-  medkits:medkits.length,guns:guns.length,mobile:MOBILE,music:!!musTimer,muted});
+  medkits:medkits.length,guns:guns.length,mobile:MOBILE,music:!!musTimer,muted,
+  gMus:MUSG?MUSG.gain.value:null,gMaster:MG?MG.gain.value:null});
 </script>
 </body>
 </html>
