@@ -20,8 +20,16 @@ html,body{height:100%;background:var(--bg);overflow:hidden;font-family:"Courier 
   touch-action:none;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 #c{position:relative;z-index:3;width:100vw;height:100vh;object-fit:cover;image-rendering:pixelated;display:block;cursor:none;touch-action:none}
 #c3{position:fixed;inset:0;width:100vw;height:100vh;object-fit:cover;image-rendering:pixelated;display:none;z-index:2;cursor:none;touch-action:none}
+/* viewport dinâmico: no telemóvel o 100vh inclui a barra do browser e esconde os controlos */
+@supports (height:100dvh){#c,#c3{height:100dvh}}
 #hotbar{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
   display:none;gap:6px;z-index:8;pointer-events:auto}
+/* em portrait o ecrã é estreito: hotbar encosta à direita, acima do cluster de botões */
+@media (pointer:coarse) and (orientation:portrait){
+  #hotbar{left:auto;right:calc(2vmin + env(safe-area-inset-right,0px));transform:none;
+    bottom:calc(48vmin + env(safe-area-inset-bottom,0px))}
+  .hslot{width:clamp(34px,7.5vmin,56px);height:clamp(34px,7.5vmin,56px)}
+}
 .hslot{width:clamp(40px,7.5vmin,56px);height:clamp(40px,7.5vmin,56px);border:2px solid rgba(223,231,239,.35);
   background:rgba(5,8,14,.55);position:relative;image-rendering:pixelated}
 .hslot.on{border-color:var(--ac2);box-shadow:0 0 12px rgba(255,209,102,.5)}
@@ -116,23 +124,25 @@ html,body{height:100%;background:var(--bg);overflow:hidden;font-family:"Courier 
   background:rgba(5,8,14,.35);display:none;pointer-events:none;transform:translate(-50%,-50%)}
 #joyNub{position:absolute;left:50%;top:50%;width:44%;height:44%;border-radius:50%;
   background:rgba(255,209,102,.55);transform:translate(-50%,-50%)}
-#fireBtn{position:fixed;right:calc(3vmin + env(safe-area-inset-right,0px));
-  bottom:calc(14vmin + env(safe-area-inset-bottom,0px));
-  width:clamp(72px,16vmin,128px);height:clamp(72px,16vmin,128px);border-radius:50%;
+/* cluster do polegar direito: FOGO no canto, SALTO por cima, R/POR à esquerda — sem tocar no HUD */
+#fireBtn{position:fixed;right:calc(4vmin + env(safe-area-inset-right,0px));
+  bottom:calc(5vmin + env(safe-area-inset-bottom,0px));
+  width:clamp(76px,17vmin,132px);height:clamp(76px,17vmin,132px);border-radius:50%;
   background:rgba(255,59,48,.82);color:var(--bg);font-family:inherit;font-weight:700;
-  font-size:clamp(12px,2.6vmin,19px);letter-spacing:.12em;border:none;pointer-events:auto;touch-action:none}
-#rBtn{position:fixed;right:calc(3vmin + clamp(80px,17.5vmin,136px) + env(safe-area-inset-right,0px));
-  bottom:calc(12vmin + env(safe-area-inset-bottom,0px));
-  width:clamp(46px,9.5vmin,76px);height:clamp(46px,9.5vmin,76px);border-radius:50%;
+  font-size:clamp(13px,2.8vmin,20px);letter-spacing:.12em;border:none;pointer-events:auto;touch-action:none}
+#rBtn{position:fixed;right:calc(7vmin + clamp(76px,17vmin,132px) + env(safe-area-inset-right,0px));
+  bottom:calc(6vmin + env(safe-area-inset-bottom,0px));
+  width:clamp(52px,11vmin,88px);height:clamp(52px,11vmin,88px);border-radius:50%;
   background:rgba(5,8,14,.6);color:var(--ac2);border:1px solid var(--ac2);font-family:inherit;
-  font-weight:700;font-size:clamp(12px,2.4vmin,18px);pointer-events:auto;touch-action:none}
-#jumpBtn{position:fixed;right:calc(4.5vmin + env(safe-area-inset-right,0px));
-  bottom:calc(14vmin + clamp(80px,17.5vmin,140px) + env(safe-area-inset-bottom,0px));
-  width:clamp(56px,12vmin,96px);height:clamp(56px,12vmin,96px);border-radius:50%;
+  font-weight:700;font-size:clamp(13px,2.6vmin,19px);pointer-events:auto;touch-action:none}
+#jumpBtn{position:fixed;right:calc(6vmin + env(safe-area-inset-right,0px));
+  bottom:calc(8vmin + clamp(76px,17vmin,132px) + env(safe-area-inset-bottom,0px));
+  width:clamp(60px,13vmin,104px);height:clamp(60px,13vmin,104px);border-radius:50%;
   background:rgba(255,209,102,.75);color:var(--bg);border:none;font-family:inherit;
-  font-weight:700;font-size:clamp(11px,2.2vmin,16px);letter-spacing:.08em;pointer-events:auto;touch-action:none}
-#pauseBtn{position:fixed;left:50%;top:calc(9vmin + env(safe-area-inset-top,0px));transform:translateX(-50%);
-  width:clamp(40px,7vmin,56px);height:clamp(30px,5vmin,40px);
+  font-weight:700;font-size:clamp(12px,2.4vmin,17px);letter-spacing:.08em;pointer-events:auto;touch-action:none}
+#pauseBtn{position:fixed;right:calc(8vmin + clamp(64px,15vmin,96px) + clamp(36px,7vmin,48px) + env(safe-area-inset-right,0px));
+  top:calc(2vmin + env(safe-area-inset-top,0px));
+  width:clamp(40px,7vmin,56px);height:clamp(30px,5.5vmin,40px);
   background:rgba(5,8,14,.6);color:var(--hud);border:1px solid rgba(223,231,239,.3);
   font-family:inherit;font-size:clamp(11px,2vmin,14px);pointer-events:auto;touch-action:none}
 @media (pointer:coarse){
@@ -466,9 +476,11 @@ function makeImp(hurt){
   return s;
 }
 const IMP=makeImp(false),IMPH=makeImp(true);
-// foto do amigo substitui o monstro quando carregar (fallback: imp desenhado)
+// fotos dos amigos substituem o monstro quando carregarem (fallback: imp desenhado)
+// cada inimigo nasce com uma variedade de skin (campo sk, sincronizado na rede)
 let AMIGO=null,AMIGOH=null;
-(function(){
+const SKINS=[{src:'amigo.png',n:null,h:null},{src:'mob2.png',n:null,h:null}];
+SKINS.forEach(S=>{
   const im=new Image();
   im.onload=()=>{
     const mk=tint=>{
@@ -479,10 +491,15 @@ let AMIGO=null,AMIGOH=null;
       if(tint){g.globalCompositeOperation='source-atop';g.fillStyle='rgba(255,255,255,.75)';g.fillRect(0,0,s,s);}
       return c;
     };
-    AMIGO=mk(false);AMIGOH=mk(true);
+    S.n=mk(false);S.h=mk(true);
+    if(S.src==='amigo.png'){AMIGO=S.n;AMIGOH=S.h;} // também usados pelos NPCs do mundo secreto
   };
-  im.src='amigo.png';
-})();
+  im.src=S.src;
+});
+const skinCv=(sk,hurt)=>{
+  const S=SKINS[(sk||0)%SKINS.length];
+  return hurt?(S.h||AMIGOH||IMPH):(S.n||AMIGO||IMP);
+};
 function makeMarine(col){
   const s=document.createElement('canvas');s.width=64;s.height=64;const g=s.getContext('2d');
   g.fillStyle='#1a1f29';g.fillRect(22,46,7,18);g.fillRect(35,46,7,18);
@@ -817,11 +834,11 @@ function spawnWave(){
   const n=Math.round((2+wave*2)*(0.7+0.3*nPlayers));
   for(let i=0;i<n;i++){
     const s=enemySpot();
-    enemies.push({id:eid++,x:s.x,y:s.y,tx:s.x,ty:s.y,hp:100,sc:1,spd:1.1+wave*.12+Math.random()*.3,atkT:0,hurtT:0,bob:Math.random()*7});
+    enemies.push({id:eid++,x:s.x,y:s.y,tx:s.x,ty:s.y,hp:100,sc:1,sk:Math.random()*SKINS.length|0,spd:1.1+wave*.12+Math.random()*.3,atkT:0,hurtT:0,bob:Math.random()*7});
   }
   if(isBoss){
     const s=enemySpot();
-    enemies.push({id:eid++,x:s.x,y:s.y,tx:s.x,ty:s.y,hp:1200+wave*60,sc:2.4,boss:true,spd:1+wave*.04,atkT:0,hurtT:0,bob:Math.random()*7});
+    enemies.push({id:eid++,x:s.x,y:s.y,tx:s.x,ty:s.y,hp:1200+wave*60,sc:2.4,boss:true,sk:Math.random()*SKINS.length|0,spd:1+wave*.04,atkT:0,hurtT:0,bob:Math.random()*7});
   }
   // health packs: 2 por onda, máx 4 no mapa
   for(let i=0;i<2&&medkits.length<4;i++){const s=openSpot(3);medkits.push({id:mkId++,x:s.x,y:s.y});}
@@ -1329,10 +1346,9 @@ const V=(()=>{
     const gx=24,gz=24,gy=ground(gx,gz);
     vox[idx(gx,gy,gz)]=BL.stone;rebuildAt(gx,gz);
     meatS=sprite(MEAT,1.1,1.1);meatS.position.set(gx+.5,gy+2.1,gz+.5);scene.add(meatS);
-    // NPCs pacíficos (a foto do amigo)
-    const amigoCv=AMIGO||IMP;
+    // NPCs pacíficos (fotos dos amigos, skin à sorte)
     const mkN=(mode,x,z)=>{
-      const sp=sprite(amigoCv,1.6,1.6);
+      const sp=sprite(skinCv(Math.random()*SKINS.length|0,false),1.6,1.6);
       const y=ground(x,z);sp.position.set(x,y+.8,z);scene.add(sp);
       npcs.push({sp,mode,x,z,tx:x,tz:z,wT:0,singT:0,bob:Math.random()*7});
     };
@@ -1601,7 +1617,7 @@ const V=(()=>{
 const C3=(()=>{
   let ready=false,scene,cam,torch,muzzle,mapG=null,uid=1;
   let matWall={},matCol,cylGeo,shGeo,shMat,glowTex,boomTex,bloodMat;
-  let amN=null,amH=null,amSrcN=null,amSrcH=null;
+  const skM=[]; // materiais por skin de inimigo: {n,h,srcN,srcH}
   let doorCv,doorTex,doorGlowTex;
   const ents=new Map(),TEXC=new Map();
   function ctex(c){
@@ -1734,16 +1750,20 @@ const C3=(()=>{
     scene.add(mapG);
   }
   function enemyMats(){
-    const n=AMIGO||IMP,h=AMIGOH||IMPH;
-    if(amSrcN!==n){
-      amSrcN=n;if(amN){amN.map.dispose();amN.dispose();}
-      const t=new THREE.CanvasTexture(n);t.colorSpace=THREE.SRGBColorSpace;
-      amN=new THREE.SpriteMaterial({map:t,transparent:true});
-    }
-    if(amSrcH!==h){
-      amSrcH=h;if(amH){amH.map.dispose();amH.dispose();}
-      const t=new THREE.CanvasTexture(h);t.colorSpace=THREE.SRGBColorSpace;
-      amH=new THREE.SpriteMaterial({map:t,transparent:true});
+    // troca preguiçosa: quando a foto de um skin carrega, o material é refeito
+    for(let i=0;i<SKINS.length;i++){
+      const M=skM[i]||(skM[i]={n:null,h:null,srcN:null,srcH:null});
+      const nC=skinCv(i,false),hC=skinCv(i,true);
+      if(M.srcN!==nC){
+        M.srcN=nC;if(M.n){M.n.map.dispose();M.n.dispose();}
+        const t=new THREE.CanvasTexture(nC);t.colorSpace=THREE.SRGBColorSpace;
+        M.n=new THREE.SpriteMaterial({map:t,transparent:true});
+      }
+      if(M.srcH!==hC){
+        M.srcH=hC;if(M.h){M.h.map.dispose();M.h.dispose();}
+        const t=new THREE.CanvasTexture(hC);t.colorSpace=THREE.SRGBColorSpace;
+        M.h=new THREE.SpriteMaterial({map:t,transparent:true});
+      }
     }
   }
   function mkShadow(s){
@@ -1772,16 +1792,16 @@ const C3=(()=>{
       seen.add(k);return r;
     };
     for(const e of enemies){
-      const sc=e.sc||1;
+      const sc=e.sc||1,M=skM[(e.sk||0)%SKINS.length];
       const r=rec('e'+e.id,()=>{
         const g=new THREE.Group();
-        const sp=new THREE.Sprite(amN);
+        const sp=new THREE.Sprite(M.n);
         sp.scale.set(.74*sc,.9*sc,1);sp.center.set(.5,0);
         g.add(sp);g.add(mkShadow(.52*sc));
         return{g,sp,own:[]};
       });
       r.g.position.set(e.x,0,e.y);
-      r.sp.material=time<(e.hurtT||0)?amH:amN;
+      r.sp.material=time<(e.hurtT||0)?M.h:M.n;
       r.sp.position.y=.02+Math.sin(time*6+(e.bob||0))*.03;
     }
     for(const [id,q2] of NET.players){
@@ -1927,7 +1947,7 @@ function nextCol(){
   return (NET.players.size+1)%COLORS.length;
 }
 function snapshot(){
-  const e=enemies.map(o=>[o.id,+o.x.toFixed(2),+o.y.toFixed(2),o.hp,o.sc||1]);
+  const e=enemies.map(o=>[o.id,+o.x.toFixed(2),+o.y.toFixed(2),o.hp,o.sc||1,o.sk||0]);
   const pl={};
   pl[NET.peer.id]=[+p.x.toFixed(2),+p.y.toFixed(2),+p.a.toFixed(2),p.hp,myName,NET.myCol,dead?1:0,+p.z.toFixed(2),dim==='bloco'?1:0];
   for(const [id,q] of NET.players)pl[id]=[+q.x.toFixed(2),+q.y.toFixed(2),q.a,q.hp,q.name,q.col,q.dead?1:0,+(q.z||0).toFixed(2),q.sw?1:0];
@@ -1940,10 +1960,10 @@ function snapshot(){
 function applySnapshot(m){
   if(m.mi!==undefined&&m.mi!==mapIdx){applyMap(m.mi);enemies=[];}
   const seen=new Set();
-  for(const [id,x,y,hp,sc] of m.e){
+  for(const [id,x,y,hp,sc,sk] of m.e){
     seen.add(id);
     let e=enemies.find(o=>o.id===id);
-    if(!e)enemies.push({id,x,y,tx:x,ty:y,hp,sc:sc||1,hurtT:0,bob:Math.random()*7});
+    if(!e)enemies.push({id,x,y,tx:x,ty:y,hp,sc:sc||1,sk:sk||0,hurtT:0,bob:Math.random()*7});
     else{e.tx=x;e.ty=y;if(hp<e.hp)e.hurtT=time+.13;e.hp=hp;}
   }
   for(let i=enemies.length-1;i>=0;i--)if(!seen.has(enemies[i].id))enemies.splice(i,1);
@@ -2092,6 +2112,7 @@ function begin(resume){
   if(NET.mode!=='solo'){$('roomBox').style.display='block';$('roomCode').textContent=NET.code;}
   else $('roomBox').style.display='none';
   $('touch').style.display=MOBILE?'block':'none';
+  if(MOBILE){goFS();restJoy();}
   startMusic();
   if(resume&&!MOBILE){
     // pós-update: o browser exige clique para voltar a prender o rato
@@ -2132,9 +2153,9 @@ function backToMenu(){
 }
 
 // ============ input ============
-$('ctaSolo').addEventListener('click',e=>{e.stopPropagation();ac().resume?.();netReset();begin();});
-$('ctaHost').addEventListener('click',e=>{e.stopPropagation();ac().resume?.();netReset();startHost();});
-$('ctaJoin').addEventListener('click',e=>{e.stopPropagation();ac().resume?.();netReset();startJoin();});
+$('ctaSolo').addEventListener('click',e=>{e.stopPropagation();ac().resume?.();goFS();netReset();begin();});
+$('ctaHost').addEventListener('click',e=>{e.stopPropagation();ac().resume?.();goFS();netReset();startHost();});
+$('ctaJoin').addEventListener('click',e=>{e.stopPropagation();ac().resume?.();goFS();netReset();startJoin();});
 $('copyBtn').addEventListener('click',e=>{
   e.stopPropagation();
   if(navigator.clipboard)navigator.clipboard.writeText(NET.link).then(()=>toast('LINK COPIADO')).catch(()=>{});
@@ -2150,7 +2171,7 @@ $('muteBtn').addEventListener('touchstart',muteTap,{passive:false});
 setMuted(muted); // sincroniza ícones com localStorage
 ov.addEventListener('click',()=>{
   if(state!=='pause')return;
-  if(MOBILE){state='play';ov.style.display='none';cross.style.display='block';}
+  if(MOBILE){goFS();state='play';ov.style.display='none';cross.style.display='block';}
   else lock();
 });
 document.addEventListener('pointerlockchange',()=>{
@@ -2246,8 +2267,27 @@ for(const ev of ['pointerdown','keydown','touchstart'])
 
 // ============ touch (mobile) ============
 let joyId=null,lookId=null,joyOX=0,joyOY=0,joyVX=0,joyVY=0,lookPX=0,lookPY=0,joyR=55;
+let restJoy=()=>{};
+function goFS(){
+  // fullscreen no telemóvel: sem a barra do browser os controlos ficam sempre visíveis
+  if(!MOBILE||document.fullscreenElement)return;
+  try{
+    const el=document.documentElement;
+    const fn=el.requestFullscreen||el.webkitRequestFullscreen;
+    if(fn){const r=fn.call(el,{navigationUI:'hide'});r&&r.catch&&r.catch(()=>{});}
+  }catch(e){}
+}
 if(MOBILE){
   const tj=$('joyBase'),nub=$('joyNub');
+  restJoy=()=>{
+    // base do joystick em repouso no canto inferior esquerdo (sempre visível)
+    tj.style.display='block';
+    const vm=Math.min(innerWidth,innerHeight)/100,half=(tj.offsetWidth||110)/2;
+    tj.style.left=(12*vm+half)+'px';
+    tj.style.top=(innerHeight-9*vm-half)+'px';
+    nub.style.transform='translate(-50%,-50%)';
+  };
+  addEventListener('resize',()=>{if(state==='play'&&joyId===null)restJoy();});
   document.addEventListener('touchstart',e=>{
     if(state!=='play')return;
     for(const t of e.changedTouches){
@@ -2282,7 +2322,7 @@ if(MOBILE){
   },{passive:false});
   const endT=e=>{
     for(const t of e.changedTouches){
-      if(t.identifier===joyId){joyId=null;joyVX=0;joyVY=0;tj.style.display='none';}
+      if(t.identifier===joyId){joyId=null;joyVX=0;joyVY=0;restJoy();}
       if(t.identifier===lookId)lookId=null;
     }
   };
@@ -2447,7 +2487,8 @@ function render2D(){
     const spz=sp.kind==='p'?(sp.ref.z||0):sp.kind==='meat'?1.42+Math.sin(time*2)*.06:0;
     const top=horY+(camZ-spz)*size-sh+bob; // base assenta no chão (ou na parede, se z>0)
     const left=scx-sw/2+(dance?Math.sin(time*5+sp.ref.bob)*size*.05:0);
-    const img=(sp.kind==='e'||sp.kind==='n')?(sp.kind==='e'&&time<sp.ref.hurtT?(AMIGOH||IMPH):(AMIGO||IMP))
+    const img=sp.kind==='e'?skinCv(sp.ref.sk,time<sp.ref.hurtT)
+      :sp.kind==='n'?(AMIGO||IMP)
       :sp.kind==='p'?MARINES[sp.ref.col%COLORS.length]
       :sp.kind==='m'?MEDKIT:sp.kind==='b'?BOOSTICON:sp.kind==='meat'?MEAT:GUNICONS[sp.ref.k];
     const SS=img.width;
