@@ -18,7 +18,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;background:var(--bg);overflow:hidden;font-family:"Courier New",monospace;color:var(--hud);
   touch-action:none;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
-#c{width:100vw;height:100vh;object-fit:cover;image-rendering:pixelated;display:block;cursor:none;touch-action:none}
+#c{position:relative;z-index:3;width:100vw;height:100vh;object-fit:cover;image-rendering:pixelated;display:block;cursor:none;touch-action:none}
 #c3{position:fixed;inset:0;width:100vw;height:100vh;object-fit:cover;image-rendering:pixelated;display:none;z-index:2;cursor:none;touch-action:none}
 #hotbar{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
   display:none;gap:6px;z-index:8;pointer-events:auto}
@@ -329,7 +329,7 @@ const COLORS=['#ffd166','#4cc9f0','#80ed99','#ff8fab','#c77dff','#f4a261'];
 
 // ============ state ============
 const p={x:12.5,y:11.5,a:0,hp:100,z:0};
-let vz=0,lookUp=0,jumpCharges=0; // lookUp: pitch (y-shear); jumpCharges: morto, mantido p/ compat
+let vz=0,pitC=0; // pitC: pitch da câmara de combate (radianos)
 let dirX=1,dirY=0,planeX=0,planeY=0.66;
 let state='menu',time=0,score=0,wave=0,best=+(localStorage.b77||0);
 const WEAPONS={
@@ -679,7 +679,7 @@ function exitBloco(){
   V.exit();
   dim='combat';portalCd=time+2;mouseDown=false;
   const d=doorPos||{x:MW/2,y:MH/2};
-  p.x=d.x;p.y=d.y+1.2;p.z=0;vz=0;lookUp=0;
+  p.x=d.x;p.y=d.y+1.2;p.z=0;vz=0;pitC=0;
   if(!free(p.x,p.y,.22,0,map)){const s=openSpot(0);p.x=s.x;p.y=s.y;}
   musStep=0;
   showBanner('DE VOLTA À GUERRA',2000);
@@ -782,6 +782,7 @@ function applyMap(i,quiet){
     if(found){doorPos=found;break;}
   }
   if(dim==='combat'){p.z=0;vz=0;const s=openSpot(0);p.x=s.x;p.y=s.y;}
+  if(C3.ready)C3.rebuild(); // malha 3D do mapa novo
   if(!quiet)toast('MAPA NOVO',2500);
 }
 
@@ -1122,8 +1123,17 @@ function startReload(){
 }
 
 
-// ============ MUNDO SECRETO 3D (voxels WebGL) ============
+// ============ renderer WebGL partilhado ============
 const cv3=document.getElementById('c3');
+let R3=null;
+function getR3(){
+  if(!R3){
+    R3=new THREE.WebGLRenderer({canvas:cv3,antialias:!MOBILE});
+    R3.setSize(1280,720,false);
+  }
+  return R3;
+}
+// ============ MUNDO SECRETO 3D (voxels WebGL) ============
 const V=(()=>{
   const SX=48,SZ=48,SY=14,WATERL=4,CH=8;
   const BL={air:0,stone:1,dirt:2,grass:3,sand:4,log:5,leaves:6,water:7,bedrock:8};
@@ -1272,8 +1282,7 @@ const V=(()=>{
     return sprite(c,size,size);
   }
   function init(){
-    renderer=new THREE.WebGLRenderer({canvas:cv3,antialias:false});
-    renderer.setSize(1280,720,false); // mais nítido, ainda leve
+    renderer=getR3();
     scene=new THREE.Scene();
     scene.background=new THREE.Color(0x79b7f2);
     scene.fog=new THREE.Fog(0x9cc9f0,34,95);
@@ -1579,13 +1588,317 @@ const V=(()=>{
     return true;
   }
   function exit(){
-    active=false;cv3.style.display='none';
+    active=false; // o canvas fica: o combate também é 3D
     $('hotbar').style.display='none';
   }
   return{enter,exit,step,look,jump,place,tryBreak,ray:raycast,
     selectDelta:d=>select(sel+d),select:i=>select(i),
     get active(){return active},get ready(){return ready},
     dbg:()=>({active,ready,inv:{...inv3},sel:HOT[sel],px:+pos?.x.toFixed(1),py:+pos?.y.toFixed(1),pz:+pos?.z.toFixed(1),npcs:npcs.length})};
+})();
+
+// ============ COMBATE 3D (high-poly WebGL) ============
+const C3=(()=>{
+  let ready=false,scene,cam,torch,muzzle,mapG=null,uid=1;
+  let matWall={},matCol,cylGeo,shGeo,shMat,glowTex,boomTex,bloodMat;
+  let amN=null,amH=null,amSrcN=null,amSrcH=null;
+  let doorCv,doorTex,doorGlowTex;
+  const ents=new Map(),TEXC=new Map();
+  function ctex(c){
+    let t=TEXC.get(c);
+    if(!t){
+      t=new THREE.CanvasTexture(c);
+      t.colorSpace=THREE.SRGBColorSpace;
+      if(c.width<=64)t.magFilter=THREE.NearestFilter;
+      TEXC.set(c,t);
+    }
+    return t;
+  }
+  function radialTex(stops){
+    const c=document.createElement('canvas');c.width=c.height=64;
+    const g=c.getContext('2d');
+    const gr=g.createRadialGradient(32,32,1,32,32,32);
+    for(const [o,col] of stops)gr.addColorStop(o,col);
+    g.fillStyle=gr;g.fillRect(0,0,64,64);
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+    return t;
+  }
+  function floorTex(){
+    const c=document.createElement('canvas');c.width=c.height=128;
+    const g=c.getContext('2d');
+    g.fillStyle='#2b2117';g.fillRect(0,0,128,128);
+    for(let i=0;i<900;i++){
+      g.fillStyle=Math.random()<.5?'rgba(82,62,40,.4)':'rgba(14,10,7,.45)';
+      g.fillRect(Math.random()*128|0,Math.random()*128|0,2,2);
+    }
+    g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=2;
+    g.strokeRect(0,0,64,64);g.strokeRect(64,64,64,64); // juntas das placas
+    const t=new THREE.CanvasTexture(c);
+    t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(MW/2,MH/2);
+    t.colorSpace=THREE.SRGBColorSpace;t.magFilter=THREE.NearestFilter;
+    return t;
+  }
+  function init(){
+    if(ready||typeof THREE==='undefined')return;
+    getR3();
+    scene=new THREE.Scene();
+    scene.background=new THREE.Color(0x07090f);
+    scene.fog=new THREE.Fog(0x0a0d16,9,36);
+    cam=new THREE.PerspectiveCamera(70,16/9,.05,120);
+    cam.rotation.order='YXZ';
+    scene.add(cam);
+    scene.add(new THREE.AmbientLight(0x9aa7c4,.55));
+    scene.add(new THREE.HemisphereLight(0x5a6c96,0x3a2c1c,.7));
+    torch=new THREE.PointLight(0xffd9a8,14,13,1.8);scene.add(torch);
+    muzzle=new THREE.PointLight(0xffc36b,0,9,1.6);scene.add(muzzle);
+    // céu nocturno: estrelas + lua (fora do nevoeiro)
+    const N=260,sp3=new Float32Array(N*3);
+    for(let i=0;i<N;i++){
+      const a=Math.random()*Math.PI*2,e2=.12+Math.random()*1.25,r=72;
+      sp3[i*3]=MW/2+Math.cos(a)*Math.cos(e2)*r;
+      sp3[i*3+1]=Math.sin(e2)*r;
+      sp3[i*3+2]=MH/2+Math.sin(a)*Math.cos(e2)*r;
+    }
+    const sg=new THREE.BufferGeometry();
+    sg.setAttribute('position',new THREE.BufferAttribute(sp3,3));
+    scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xcfe0ff,size:.55,fog:false,transparent:true,opacity:.9})));
+    const moon=new THREE.Sprite(new THREE.SpriteMaterial({
+      map:radialTex([[0,'rgba(240,246,255,1)'],[.45,'rgba(190,205,235,.55)'],[1,'rgba(150,170,210,0)']]),
+      transparent:true,fog:false,depthWrite:false}));
+    moon.scale.set(15,15,1);moon.position.set(MW/2+36,42,-20);scene.add(moon);
+    // materiais de parede a partir das texturas procedurais existentes
+    for(const t of [1,2,3]){
+      const tx=ctex(WALLTEX[t]);
+      matWall[t]=new THREE.MeshLambertMaterial({map:tx,vertexColors:true});
+    }
+    matCol=new THREE.MeshLambertMaterial({map:ctex(WALLTEX[3])});
+    cylGeo=new THREE.CylinderGeometry(.42,.5,1,16);
+    const fl=new THREE.Mesh(new THREE.PlaneGeometry(MW,MH),new THREE.MeshLambertMaterial({map:floorTex()}));
+    fl.rotation.x=-Math.PI/2;fl.position.set(MW/2,0,MH/2);scene.add(fl);
+    shGeo=new THREE.CircleGeometry(.5,18);
+    shMat=new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.3,depthWrite:false});
+    glowTex=radialTex([[0,'rgba(255,230,150,.9)'],[.55,'rgba(255,200,80,.3)'],[1,'rgba(255,180,60,0)']]);
+    boomTex=radialTex([[0,'rgba(255,244,200,1)'],[.4,'rgba(255,140,40,.75)'],[1,'rgba(255,70,20,0)']]);
+    doorGlowTex=radialTex([[0,'rgba(210,160,255,.5)'],[.5,'rgba(160,90,255,.22)'],[1,'rgba(120,60,255,0)']]);
+    bloodMat=new THREE.SpriteMaterial({color:0xc01620,transparent:true});
+    doorCv=document.createElement('canvas');doorCv.width=32;doorCv.height=48;
+    doorTex=new THREE.CanvasTexture(doorCv);
+    doorTex.colorSpace=THREE.SRGBColorSpace;doorTex.magFilter=THREE.NearestFilter;
+    ready=true;
+    rebuild();
+  }
+  function rebuild(){
+    if(!ready)return;
+    if(mapG){
+      scene.remove(mapG);
+      mapG.traverse(o=>{if(o.geometry&&o.geometry!==cylGeo)o.geometry.dispose();});
+    }
+    mapG=new THREE.Group();
+    const buf={1:{P:[],N:[],U:[],C:[]},2:{P:[],N:[],U:[],C:[]}};
+    const q=(B,verts,nx,ny,nz,ao)=>{ // quad bl,br,tr,tl
+      const uvq=[[0,1],[1,1],[1,0],[0,0]];
+      for(const k of [0,1,2,0,2,3]){
+        B.P.push(...verts[k]);B.N.push(nx,ny,nz);
+        B.U.push(uvq[k][0],1-uvq[k][1]);
+        B.C.push(ao[k],ao[k],ao[k]);
+      }
+    };
+    const open=(x,y)=>{
+      if(x<0||y<0||x>=MW||y>=MH)return false;
+      const n=map[y][x];return n===0||n===3; // colunas não tapam faces
+    };
+    const AO=[.62,.62,1,1]; // base mais escura = oclusão de contacto
+    for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
+      const t=map[y][x];if(!t)continue;
+      if(t===3){
+        const m=new THREE.Mesh(cylGeo,matCol);
+        m.position.set(x+.5,.5,y+.5);mapG.add(m);
+        continue;
+      }
+      const B=buf[t]||buf[1];
+      if(open(x,y-1))q(B,[[x+1,0,y],[x,0,y],[x,1,y],[x+1,1,y]],0,0,-1,AO);
+      if(open(x,y+1))q(B,[[x,0,y+1],[x+1,0,y+1],[x+1,1,y+1],[x,1,y+1]],0,0,1,AO);
+      if(open(x+1,y))q(B,[[x+1,0,y+1],[x+1,0,y],[x+1,1,y],[x+1,1,y+1]],1,0,0,AO);
+      if(open(x-1,y))q(B,[[x,0,y],[x,0,y+1],[x,1,y+1],[x,1,y]],-1,0,0,AO);
+      q(B,[[x,1,y+1],[x+1,1,y+1],[x+1,1,y],[x,1,y]],0,1,0,[.9,.9,.9,.9]); // topo (visível ao saltar)
+    }
+    for(const t of [1,2]){
+      const B=buf[t];if(!B.P.length)continue;
+      const ge=new THREE.BufferGeometry();
+      ge.setAttribute('position',new THREE.Float32BufferAttribute(B.P,3));
+      ge.setAttribute('normal',new THREE.Float32BufferAttribute(B.N,3));
+      ge.setAttribute('uv',new THREE.Float32BufferAttribute(B.U,2));
+      ge.setAttribute('color',new THREE.Float32BufferAttribute(B.C,3));
+      mapG.add(new THREE.Mesh(ge,matWall[t]));
+    }
+    scene.add(mapG);
+  }
+  function enemyMats(){
+    const n=AMIGO||IMP,h=AMIGOH||IMPH;
+    if(amSrcN!==n){
+      amSrcN=n;if(amN){amN.map.dispose();amN.dispose();}
+      const t=new THREE.CanvasTexture(n);t.colorSpace=THREE.SRGBColorSpace;
+      amN=new THREE.SpriteMaterial({map:t,transparent:true});
+    }
+    if(amSrcH!==h){
+      amSrcH=h;if(amH){amH.map.dispose();amH.dispose();}
+      const t=new THREE.CanvasTexture(h);t.colorSpace=THREE.SRGBColorSpace;
+      amH=new THREE.SpriteMaterial({map:t,transparent:true});
+    }
+  }
+  function mkShadow(s){
+    const m=new THREE.Mesh(shGeo,shMat);
+    m.rotation.x=-Math.PI/2;m.position.y=.012;m.scale.set(s,s,1);
+    return m;
+  }
+  function mkTag(name,color){
+    const c=document.createElement('canvas');c.width=192;c.height=44;
+    const g=c.getContext('2d');
+    g.font='bold 26px "Courier New",monospace';g.textAlign='center';g.textBaseline='middle';
+    g.lineWidth=5;g.strokeStyle='#000';g.strokeText(name,96,24);
+    g.fillStyle=color;g.fillText(name,96,24);
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false}));
+    sp.scale.set(1.5,.34,1);
+    return sp;
+  }
+  function step(dt){
+    if(!ready)return;
+    enemyMats();
+    const seen=new Set();
+    const rec=(k,mk)=>{
+      let r=ents.get(k);
+      if(!r){r=mk();ents.set(k,r);scene.add(r.g);}
+      seen.add(k);return r;
+    };
+    for(const e of enemies){
+      const sc=e.sc||1;
+      const r=rec('e'+e.id,()=>{
+        const g=new THREE.Group();
+        const sp=new THREE.Sprite(amN);
+        sp.scale.set(.74*sc,.9*sc,1);sp.center.set(.5,0);
+        g.add(sp);g.add(mkShadow(.52*sc));
+        return{g,sp,own:[]};
+      });
+      r.g.position.set(e.x,0,e.y);
+      r.sp.material=time<(e.hurtT||0)?amH:amN;
+      r.sp.position.y=.02+Math.sin(time*6+(e.bob||0))*.03;
+    }
+    for(const [id,q2] of NET.players){
+      if(q2.dead||q2.sw)continue;
+      const r=rec('p'+id,()=>{
+        const g=new THREE.Group();
+        const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:ctex(MARINES[q2.col%COLORS.length]),transparent:true}));
+        sp.scale.set(.7,.85,1);sp.center.set(.5,0);g.add(sp);
+        const tg=mkTag(q2.name||'?',COLORS[q2.col%COLORS.length]);
+        tg.position.y=1.06;g.add(tg);
+        const sh=mkShadow(.48);g.add(sh);
+        return{g,sh,own:[sp.material,tg.material,tg.material.map]};
+      });
+      r.g.position.set(q2.x,(q2.z||0),q2.y);
+      r.sh.position.y=.012-(q2.z||0); // a sombra fica no chão mesmo em salto
+    }
+    for(const m of medkits){
+      const r=rec('m'+m.id,()=>{
+        const mt=new THREE.MeshLambertMaterial({map:ctex(MEDKIT),emissive:0x1c2f1c});
+        const bx=new THREE.Mesh(new THREE.BoxGeometry(.3,.3,.3),mt);
+        const g=new THREE.Group();g.add(bx);g.add(mkShadow(.2));
+        return{g,bx,own:[mt]};
+      });
+      r.g.position.set(m.x,0,m.y);
+      r.bx.position.y=.26+Math.sin(time*3+m.id)*.04;
+      r.bx.rotation.y=time*1.4+m.id;
+    }
+    for(const g2 of guns){
+      const r=rec('g'+g2.id,()=>{
+        const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:ctex(GUNICONS[g2.k]),transparent:true}));
+        sp.scale.set(.36,.36,1);sp.center.set(.5,0);
+        const g=new THREE.Group();g.add(sp);g.add(mkShadow(.18));
+        return{g,sp,own:[sp.material]};
+      });
+      r.g.position.set(g2.x,0,g2.y);
+      r.sp.position.y=.08+Math.sin(time*3+g2.id)*.025;
+    }
+    for(const b of boosts){
+      const r=rec('b'+b.id,()=>{
+        const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:ctex(BOOSTICON),transparent:true}));
+        sp.scale.set(.4,.4,1);sp.center.set(.5,0);
+        const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+        gl.scale.set(1.1,1.1,1);gl.position.y=.3;
+        const g=new THREE.Group();g.add(sp);g.add(gl);g.add(mkShadow(.2));
+        return{g,sp,gl,own:[sp.material,gl.material]};
+      });
+      r.g.position.set(b.x,0,b.y);
+      r.sp.position.y=.12+Math.sin(time*4+b.id)*.04;
+      r.gl.material.opacity=.5+Math.sin(time*5+b.id)*.25;
+    }
+    if(doorPos&&dim==='combat'){
+      const r=rec('door',()=>{
+        const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:doorTex,transparent:true}));
+        sp.scale.set(.55,1.05,1);sp.center.set(.5,0);
+        const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:doorGlowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+        gl.scale.set(2.3,2.3,1);gl.position.y=.6;
+        const g=new THREE.Group();g.add(sp);g.add(gl);
+        return{g,own:[sp.material,gl.material]};
+      });
+      r.g.position.set(doorPos.x,0,doorPos.y);
+      const dg=doorCv.getContext('2d');
+      for(let i=0;i<48;i+=4){
+        dg.fillStyle='hsl('+((i*8+time*200)%360)+',95%,60%)';
+        dg.fillRect(0,i,32,4);
+      }
+      doorTex.needsUpdate=true;
+    }
+    for(let i=booms.length-1;i>=0;i--){
+      const b=booms[i];
+      if(b.t<time){booms.splice(i,1);continue;}
+      if(b._id===undefined)b._id=uid++;
+      const r=rec('x'+b._id,()=>{
+        const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:boomTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+        sp.position.y=.55;
+        const g=new THREE.Group();g.add(sp);
+        return{g,sp,own:[sp.material]};
+      });
+      const k=Math.max(0,(b.t-time)/.35),s=2.6*(1.35-k);
+      r.sp.scale.set(s,s,1);r.sp.material.opacity=k;
+      r.g.position.set(b.x,0,b.y);
+    }
+    for(let i=bloodFx.length-1;i>=0;i--){
+      const b=bloodFx[i];
+      if(b.t<time){bloodFx.splice(i,1);continue;}
+      b.h+=b.vh*dt;b.vh-=4*dt;
+      if(b._id===undefined)b._id=uid++;
+      const r=rec('bl'+b._id,()=>{
+        const sp=new THREE.Sprite(bloodMat);sp.scale.set(.07,.07,1);
+        const g=new THREE.Group();g.add(sp);
+        return{g,own:[]};
+      });
+      r.g.position.set(b.x,Math.max(.03,b.h),b.y);
+    }
+    for(const [k,r] of ents){
+      if(seen.has(k))continue;
+      scene.remove(r.g);
+      r.g.traverse(o=>{if(o.geometry&&o.geometry!==shGeo)o.geometry.dispose();});
+      for(const o of r.own)o.dispose&&o.dispose();
+      ents.delete(k);
+    }
+    // câmara: posição do jogador + pitch real + bob de passo + shake
+    const bobC=moving&&!dead?Math.sin(time*8.5)*.018:0;
+    cam.position.set(p.x,(dead?.22:.55)+p.z+bobC,p.y);
+    cam.rotation.y=-Math.PI/2-p.a;
+    cam.rotation.x=pitC;
+    cam.rotation.z=0;
+    if(shakeA>.3){
+      cam.position.x+=(Math.random()-.5)*shakeA*.012;
+      cam.position.y+=(Math.random()-.5)*shakeA*.008;
+      cam.rotation.z=(Math.random()-.5)*shakeA*.0035;
+    }
+    torch.position.set(cam.position.x,cam.position.y+.18,cam.position.z);
+    muzzle.intensity=flash*26;
+    muzzle.position.set(p.x+dirX*.6,cam.position.y-.05,p.y+dirY*.6);
+    getR3().render(scene,cam);
+  }
+  return{ensure:init,rebuild,step,get ready(){return ready}};
 })();
 
 // ============ net ============
@@ -1761,10 +2074,11 @@ function begin(resume){
   state='play';time=0;dead=false;
   if(dim==='bloco')V.exit();
   dim='combat';portalCd=0;
+  if(typeof THREE!=='undefined'){try{C3.ensure();cv3.style.display='block';}catch(_){}} // combate é 3D (fallback: raycaster 2D)
   $('mini').style.display='block';$('ammobox').style.display='block';
   if(MOBILE)$('rBtn').textContent='R';
   resetInv();reloading=0;nextFire=0;flash=0;recoil=0;beamT=0;
-  p.hp=100;p.z=0;vz=0;starT=0;lookUp=0;updateJumpHud();setAngle(0);
+  p.hp=100;p.z=0;vz=0;starT=0;pitC=0;updateJumpHud();setAngle(0);
   enemies=[];mkT=0;gnT=0;bsT=0;
   if(NET.mode!=='client'){
     score=0;wave=0;nextWaveT=0;
@@ -1799,6 +2113,7 @@ function gameOver(){
   state='over';stopMusic();
   if(score>best){best=score;localStorage.b77=best;$('best').textContent=best;}
   document.exitPointerLock&&document.exitPointerLock();
+  cv3.style.display='none';
   hud.style.display='none';cross.style.display='none';banner.style.opacity=0;
   $('touch').style.display='none';
   $('finalTxt').textContent='FIM — '+score+' PONTOS · ONDA '+wave;
@@ -1808,6 +2123,8 @@ function gameOver(){
 function backToMenu(){
   state='menu';dead=false;banner.style.opacity=0;stopMusic();
   document.exitPointerLock&&document.exitPointerLock();
+  if(dim==='bloco'){V.exit();dim='combat';}
+  cv3.style.display='none';
   hud.style.display='none';cross.style.display='none';
   $('touch').style.display='none';
   netReset();
@@ -1847,7 +2164,7 @@ document.addEventListener('mousemove',e=>{
   if(state!=='play'||document.pointerLockElement!==cv)return;
   if(dim==='bloco'){V.look(e.movementX,e.movementY);return;}
   setAngle(p.a+e.movementX*.0023);
-  lookUp=Math.max(-H*.55,Math.min(H*.55,lookUp-e.movementY*.6));
+  pitC=Math.max(-1.3,Math.min(1.3,pitC-e.movementY*.0023));
 });
 document.addEventListener('mousedown',e=>{
   if(state!=='play'||document.pointerLockElement!==cv)return;
@@ -1956,7 +2273,7 @@ if(MOBILE){
         if(state==='play'){
           const dx=t.clientX-lookPX,dy=t.clientY-lookPY;
           if(dim==='bloco')V.look(dx*1.95,dy*1.95);
-          else{setAngle(p.a+dx*.0045);lookUp=Math.max(-H*.55,Math.min(H*.55,lookUp-dy*1.1));}
+          else{setAngle(p.a+dx*.0045);pitC=Math.max(-1.3,Math.min(1.3,pitC-dy*.0045));}
         }
         lookPX=t.clientX;lookPY=t.clientY;
       }
@@ -1985,10 +2302,28 @@ if(MOBILE){
 
 // ============ render ============
 function render(){
-  if(dim==='bloco')return; // o mundo de blocos é renderizado em WebGL (#c3)
+  if(dim==='bloco'){ctx.clearRect(0,0,W,H);return;} // mundo de blocos: só WebGL (#c3)
+  if(C3.ready){
+    // combate em 3D real: o canvas 2D passa a ser só overlay (arma + laser + minimapa)
+    if(state==='play')C3.step(dtR);
+    ctx.clearRect(0,0,W,H);
+    if(beamT>time){
+      const k=(beamT-time)/.09;
+      ctx.strokeStyle='rgba(255,59,48,'+(.9*k)+')';ctx.lineWidth=4*k+1;
+      ctx.beginPath();ctx.moveTo(W/2,H-110);ctx.lineTo(W/2,H/2);ctx.stroke();
+      ctx.fillStyle='rgba(255,160,140,'+(.8*k)+')';
+      ctx.beginPath();ctx.arc(W/2,H/2,8*k+2,0,7);ctx.fill();
+    }
+    drawGun();
+    drawMini();
+    return;
+  }
+  render2D(); // fallback raycaster (THREE não carregou — offline)
+}
+function render2D(){
   const shook=shakeA>.3;
   if(shook){ctx.save();ctx.translate((Math.random()-.5)*shakeA,(Math.random()-.5)*shakeA);}
-  const horY=H/2+lookUp; // horizonte com pitch (y-shear)
+  const horY=H/2+Math.max(-H*.6,Math.min(H*.6,Math.tan(pitC)*H*.85)); // pitch por y-shear
   let g=ctx.createLinearGradient(0,0,0,Math.max(1,horY));
   g.addColorStop(0,'#202a3e');g.addColorStop(1,'#0b0f1a');
   ctx.fillStyle=g;ctx.fillRect(0,0,W,Math.max(0,horY));
@@ -2304,11 +2639,11 @@ requestAnimationFrame(frame);
 
 // debug hook (headless tests)
 window.__dbg=()=>({state,mode:NET.mode,code:NET.code,players:NET.players.size,enemies:enemies.length,eMin:enemies.length?+Math.min(...enemies.map(e=>Math.hypot(e.x-p.x,e.y-p.y))).toFixed(2):null,
-  wave,score,hp:p.hp,dead,px:+p.x.toFixed(2),py:+p.y.toFixed(2),pz:+p.z.toFixed(2),jumpCharges,boosts:boosts.length,mag,weapon,inv:inv.slice(),laserMags,
-  medkits:medkits.length,guns:guns.length,mapIdx,mobile:MOBILE,music:!!musTimer,muted,dim,starLeft:Math.max(0,Math.ceil(starT-time)),lookUp:Math.round(lookUp),vox:V.ready?V.dbg():null,door:doorPos?[+doorPos.x.toFixed(1),+doorPos.y.toFixed(1)]:null,
+  wave,score,hp:p.hp,dead,px:+p.x.toFixed(2),py:+p.y.toFixed(2),pz:+p.z.toFixed(2),boosts:boosts.length,mag,weapon,inv:inv.slice(),laserMags,
+  medkits:medkits.length,guns:guns.length,mapIdx,mobile:MOBILE,music:!!musTimer,muted,dim,starLeft:Math.max(0,Math.ceil(starT-time)),pitC:+pitC.toFixed(2),c3:C3.ready,vox:V.ready?V.dbg():null,door:doorPos?[+doorPos.x.toFixed(1),+doorPos.y.toFixed(1)]:null,
   gMus:MUSG?MUSG.gain.value:null,gMaster:MG?MG.gain.value:null,
   enemiesReachable:enemies.every(e=>reachable(e.x,e.y))});
-window.__giveGun=giveGun;window.__hurt=v=>takeDamage(v);window.__wave=()=>{enemies=[];};window.__map=i=>applyMap(i);window.__fire=()=>fire();window.__star=giveBoost;window.__jump=tryJump;window.__door=()=>enterBloco();window.__tp=(x,y,a)=>{p.x=x;p.y=y;if(a!==undefined)setAngle(a);};window.__place=placeBlock;window.__V=V; // hooks de teste
+window.__giveGun=giveGun;window.__hurt=v=>takeDamage(v);window.__wave=()=>{enemies=[];};window.__map=i=>applyMap(i);window.__fire=()=>fire();window.__star=giveBoost;window.__jump=tryJump;window.__door=()=>enterBloco();window.__tp=(x,y,a)=>{p.x=x;p.y=y;if(a!==undefined)setAngle(a);};window.__place=placeBlock;window.__V=V;window.__pitch=v=>{pitC=v;}; // hooks de teste
 </script>
 </body>
 </html>
